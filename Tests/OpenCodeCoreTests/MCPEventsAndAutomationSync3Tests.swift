@@ -366,8 +366,9 @@ struct MCPEventsAndAutomationSync3Tests {
             attachedProtocol: .rev20260728,
             ungrantedSilenceMs: 2_000,
             sleep: { ms in
-                // Scale down granted heartbeat silence for fast deterministic testing (10ms -> 30ms)
-                try await Task.sleep(for: .milliseconds(min(ms, 40)))
+                // Scale down only the granted heartbeat silence (3 x 10_000ms) so the watchdog trips quickly; keep
+                // the ungranted silence intact so a slow runner still delivers `active` and the events first.
+                try await Task.sleep(for: .milliseconds(ms >= 30_000 ? 400 : ms))
             }
         ))
         let events = try #require(conn.events)
@@ -445,8 +446,8 @@ struct MCPEventsAndAutomationSync3Tests {
         await consumer.value
         let msgs = collected.get()
         #expect(msgs.count == 2)
-        #expect(msgs[0] == .active(cursor: "c0", truncated: true))
-        #expect(msgs[1] == .event(
+        #expect(msgs.first == .active(cursor: "c0", truncated: true))
+        #expect(msgs.dropFirst().first == .event(
             eventId: "e1",
             name: "job.finished",
             timestamp: "2026-11-11T00:00:01Z",

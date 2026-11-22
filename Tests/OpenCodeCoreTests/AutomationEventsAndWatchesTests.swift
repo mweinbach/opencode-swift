@@ -532,7 +532,7 @@ struct AutomationEventsAndWatchesTests {
         let paused = try await svc.pause(auto.id)
         #expect(paused.status == .paused)
         #expect(producer.cancelledIDs.contains(s1.id))
-        #expect(svc.activeWatchIDs.isEmpty)
+        try await waitUntil { svc.activeWatchIDs.isEmpty }
         producer.emit(s1.id, .event(
             eventId: "paused_ev",
             name: "build.changed",
@@ -549,13 +549,13 @@ struct AutomationEventsAndWatchesTests {
         try await waitUntil { producer.openedStreams.count == 2 }
         let s2 = producer.openedStreams[1]
         #expect(s2.cursor == "p1")
-        #expect(svc.activeWatchIDs == [auto.id])
+        try await waitUntil { svc.activeWatchIDs == [auto.id] }
 
         // Cancelling `run()` (server stop) cancels all watches cleanly.
         firstRunner.cancel()
         await firstRunner.value
         #expect(producer.cancelledIDs.contains(s2.id))
-        #expect(svc.activeWatchIDs.isEmpty)
+        try await waitUntil { svc.activeWatchIDs.isEmpty }
 
         // Restarting `run()` reacquires the watch from cursor "p1".
         let secondRunner = Task { await svc.run() }
@@ -567,7 +567,7 @@ struct AutomationEventsAndWatchesTests {
         // Delete cancels the active watch and removes the automation.
         try await svc.remove(auto.id)
         #expect(producer.cancelledIDs.contains(s3.id))
-        #expect(svc.activeWatchIDs.isEmpty)
+        try await waitUntil { svc.activeWatchIDs.isEmpty }
         #expect(try await svc.list().isEmpty)
 
         secondRunner.cancel()
