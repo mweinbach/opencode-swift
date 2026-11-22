@@ -9,19 +9,23 @@ public enum CoreShellPermissions {
         public let target: CoreFilesystem.FileAccess.Target
         public let local: Bool
         public let once: Bool
+        /// The agent's and session's rules, read only for a command the scanner can't analyze.
+        public let rules: (@Sendable () async throws -> PermissionSchema.Ruleset)?
 
         public init(
             command: String,
             program: String,
             target: CoreFilesystem.FileAccess.Target,
-            local: Bool,
-            once: Bool = false
+            local: Bool = true,
+            once: Bool = false,
+            rules: (@Sendable () async throws -> PermissionSchema.Ruleset)? = nil
         ) {
             self.command = command
             self.program = program
             self.target = target
             self.local = local
             self.once = once
+            self.rules = rules
         }
     }
 

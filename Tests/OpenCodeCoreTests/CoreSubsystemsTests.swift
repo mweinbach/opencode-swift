@@ -1079,10 +1079,13 @@ struct CoreSubsystemsTests {
         let eventPrompt = CoreAutomation.Event.prompt(
             text: "Handle webhook",
             message: CoreAutomation.Event.Message(
-                eventId: "ev_1",
-                name: "push",
-                timestamp: "2026-01-01T00:00:00Z",
-                data: .string("line1\u{2028}line2")
+                event: CoreMCP.Registry.EventUpdate.EventPayload(
+                    eventId: "ev_1",
+                    name: "push",
+                    timestamp: "2026-01-01T00:00:00Z",
+                    data: ["text": .string("line1\u{2028}line2")]
+                ),
+                position: CoreMCP.Registry.EventPosition(cursor: "c1", seen: ["ev_1"])
             )
         )
         #expect(eventPrompt.contains("\\u2028"))

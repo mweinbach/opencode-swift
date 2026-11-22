@@ -8,10 +8,17 @@ import OpenCodeSchema
 // MARK: - AutomationShell (`core/src/automation/shell.ts`)
 
 public enum CoreAutomationShell {
+    private static func convertSessionPermissions(_ rules: SessionSchema.PermissionRuleset?) -> PermissionSchema.Ruleset {
+        (rules ?? []).compactMap { rule -> PermissionSchema.Rule? in
+            guard let effect = PermissionSchema.Effect(rawValue: rule.effect.rawValue) else { return nil }
+            return PermissionSchema.Rule(action: rule.action, resource: rule.resource, effect: effect)
+        }
+    }
+
     /// Runs in the creating Session's Location while the user is present: asks once for the shell command's
     /// permissions with `once: true` (no save patterns), so approval applies only to the command stored in this
     /// automation.
-    // parity: core/src/automation/shell.ts#authorize [status=implemented hash=1a4b09d03909]
+    // parity: core/src/automation/shell.ts#authorize [status=implemented hash=a9346fb21fd1]
     public static func authorize(
         owner: SessionSchema.Info,
         name: String,
@@ -49,6 +56,7 @@ public enum CoreAutomationShell {
             throw CoreAutomation.InvalidError(reason: String(describing: error))
         }
 
+        let mergedRules = CorePermission.merge(selected.info?.permissions ?? [], convertSessionPermissions(owner.permissions))
         let requests: [CoreFilesystem.FileAccess.PermissionRequest]
         do {
             requests = try await CoreShellPermissions.requests(
@@ -57,8 +65,8 @@ public enum CoreAutomationShell {
                     command: action.command,
                     program: program,
                     target: target,
-                    local: true,
-                    once: true
+                    once: true,
+                    rules: { mergedRules }
                 )
             )
         } catch let error as CoreAutomation.InvalidError {

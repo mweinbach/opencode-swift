@@ -151,6 +151,7 @@ public enum CoreMCP {
     public protocol Transport: Sendable {
         func start() async throws
         func send(_ message: JSONRPCMessage) async throws
+        func send(_ message: JSONRPCMessage, headers: [String: String]) async throws
         func close() async throws
         func setHandlers(
             onMessage: (@Sendable (JSONRPCMessage) -> Void)?,
@@ -162,6 +163,45 @@ public enum CoreMCP {
     // MARK: - core/src/mcp/event-errors.ts
 
     public enum EventErrors {
+        /// Exponential backoff from 1s capped at 30s, jittered in `[0.8, 1.2]`, for reopening dropped
+        /// event streams and list-change listeners.
+        public struct ReopenSchedule: Equatable, Hashable, Sendable {
+            public let baseDelayMs: Int64
+            public let maxDelayMs: Int64
+            public let jitterMin: Double
+            public let jitterMax: Double
+
+            public init(
+                baseDelayMs: Int64 = 1_000,
+                maxDelayMs: Int64 = 30_000,
+                jitterMin: Double = 0.8,
+                jitterMax: Double = 1.2
+            ) {
+                self.baseDelayMs = baseDelayMs
+                self.maxDelayMs = maxDelayMs
+                self.jitterMin = jitterMin
+                self.jitterMax = jitterMax
+            }
+
+            /// Base (unjittered) backoff delay in milliseconds for 0-based `attempt`: `min(base * 2^attempt, maxDelayMs)`.
+            public func baseDelay(attempt: Int) -> Int64 {
+                let shift = min(max(0, attempt), 20)
+                let (scaled, overflow) = baseDelayMs.multipliedReportingOverflow(by: Int64(1) << shift)
+                if overflow { return maxDelayMs }
+                return min(scaled, maxDelayMs)
+            }
+
+            /// Jittered backoff delay in milliseconds for 0-based `attempt`.
+            public func delayMs(attempt: Int, jitterFactor: Double? = nil) -> Int64 {
+                let base = Double(baseDelay(attempt: attempt))
+                let factor = jitterFactor ?? Double.random(in: jitterMin...jitterMax)
+                return max(0, Int64((base * factor).rounded()))
+            }
+        }
+
+        // parity: core/src/mcp/event-errors.ts#reopen [status=adapted hash=7a55b58ac7f3]
+        public static let reopen = ReopenSchedule()
+
         // parity: core/src/mcp/event-errors.ts#EventStreamRejectedError [status=implemented hash=5d223bd04772]
         public struct EventStreamRejectedError: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
             public static let tag = "MCP.EventStreamRejectedError"
@@ -815,12 +855,17 @@ public enum CoreMCP {
         }
 
         public func send(_ message: JSONRPCMessage) async throws {
+            try await send(message, headers: [:])
+        }
+
+        public func send(_ message: JSONRPCMessage, headers extraHeaders: [String: String]) async throws {
             let (isOpen, sessionID, protoVersion) = state.withLock { s in
                 (s.started && !s.closed, s.sessionID, s.protocolVersion)
             }
             guard isOpen else { throw PlatformError.ioFailure("Streamable HTTP transport is not open") }
 
             var reqHeaders = headers
+            for (k, v) in extraHeaders { reqHeaders[k] = v }
             reqHeaders["content-type"] = "application/json"
             reqHeaders["accept"] = "application/json, text/event-stream"
             if let sessionID { reqHeaders["mcp-session-id"] = sessionID }
@@ -830,19 +875,23 @@ public enum CoreMCP {
             }
 
             let bodyBytes = Array(try JSONEncoder().encode(message))
-            let response = try await http.send(HTTPRequest(
+            let httpRequest = HTTPRequest(
                 method: "POST",
                 url: url,
                 headers: reqHeaders,
                 body: bodyBytes
-            ))
+            )
+            let streaming = try await http.stream(httpRequest)
 
             // Capture Mcp-Session-Id case-insensitively
-            for (k, v) in response.head.headers where k.lowercased() == "mcp-session-id" {
+            for (k, v) in streaming.head.headers where k.lowercased() == "mcp-session-id" {
                 state.withLock { $0.sessionID = v }
             }
 
-            let status = response.head.statusCode
+            let status = streaming.head.statusCode
+            let contentType = streaming.head.headers.first { $0.key.lowercased() == "content-type" }?.value.lowercased() ?? "application/json"
+            let onMsg = state.withLock { $0.onMessage }
+
             if status == 401 || status == 403 {
                 throw Client.NeedsAuthError(server: server, message: "MCP server \"\(url)\" requires authorization (HTTP \(status))")
             }
@@ -852,26 +901,67 @@ public enum CoreMCP {
             if status == 202 || status == 204 {
                 return
             }
-            guard (200..<300).contains(status) else {
-                let errBody = String(decoding: response.body, as: UTF8.self)
-                throw Client.HTTPStatusError(server: server, status: status, body: errBody)
-            }
 
-            let contentType = response.head.headers.first { $0.key.lowercased() == "content-type" }?.value.lowercased() ?? "application/json"
-            let onMsg = state.withLock { $0.onMessage }
-            if contentType.contains("text/event-stream") {
-                let raw = String(decoding: response.body, as: UTF8.self)
-                for line in raw.split(separator: "\n") {
-                    if line.hasPrefix("data:") {
-                        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
-                        if payload.isEmpty || payload == "[DONE]" { continue }
-                        if let decoded = try? JSONRPCMessage.decodeLine(payload) {
-                            onMsg?(decoded)
+            if (200..<300).contains(status), contentType.contains("text/event-stream") {
+                let requestID: JSONRPCID? = if case .request(let req) = message { req.id } else { nil }
+                var sawResponse = false
+                var lineBuffer: [UInt8] = []
+                func processLine(_ bytes: [UInt8]) {
+                    let line = String(decoding: bytes, as: UTF8.self)
+                    guard line.hasPrefix("data:") else { return }
+                    let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if payload.isEmpty || payload == "[DONE]" { return }
+                    if let decoded = try? JSONRPCMessage.decodeLine(payload) {
+                        if case .response(let resp) = decoded, resp.id == requestID {
+                            sawResponse = true
+                        }
+                        onMsg?(decoded)
+                    }
+                }
+                for try await chunk in streaming.chunks {
+                    if Task.isCancelled { break }
+                    for byte in chunk {
+                        if byte == 0x0A {
+                            if lineBuffer.last == 0x0D { lineBuffer.removeLast() }
+                            processLine(lineBuffer)
+                            lineBuffer.removeAll(keepingCapacity: true)
+                        } else {
+                            lineBuffer.append(byte)
                         }
                     }
                 }
-            } else if !response.body.isEmpty {
-                let decoded = try JSONDecoder().decode(JSONRPCMessage.self, from: Data(response.body))
+                if !lineBuffer.isEmpty {
+                    if lineBuffer.last == 0x0D { lineBuffer.removeLast() }
+                    processLine(lineBuffer)
+                }
+                if requestID != nil && !sawResponse && !Task.isCancelled {
+                    throw PlatformError.ioFailure("MCP server \(server) closed the event stream")
+                }
+                return
+            }
+
+            var body: [UInt8] = []
+            for try await chunk in streaming.chunks {
+                body.append(contentsOf: chunk)
+            }
+
+            // Modern MCP servers may return JSON-RPC errors (such as SEP-2243 -32020 Header mismatch) with HTTP 400.
+            if status == 400, !body.isEmpty,
+               let decoded = try? JSONDecoder().decode(JSONRPCMessage.self, from: Data(body)),
+               case .response(let resp) = decoded,
+               resp.error != nil
+            {
+                onMsg?(decoded)
+                return
+            }
+
+            guard (200..<300).contains(status) else {
+                let errBody = String(decoding: body, as: UTF8.self)
+                throw Client.HTTPStatusError(server: server, status: status, body: errBody)
+            }
+
+            if !body.isEmpty {
+                let decoded = try JSONDecoder().decode(JSONRPCMessage.self, from: Data(body))
                 onMsg?(decoded)
             }
         }
@@ -1018,6 +1108,14 @@ public enum CoreMCP {
         public static let legacyProtocolVersion = "2025-11-25"
         public static let defaultStartupTimeoutMs: Int = 30_000
         public static let probeTimeoutMs: Int = 5_000
+        public static let eventsExtensionKey = "io.modelcontextprotocol/events"
+        public static let subscriptionIDMetaKey = "io.modelcontextprotocol/subscriptionId"
+        public static let headerMismatchCode = -32020
+        public static let eventStreamRejectedCodes: Set<Int> = [-32601, -32602, -32023, -32024, -32026]
+        public static let missedHeartbeats = 3
+        public static let ungrantedSilenceMs: Int64 = 30_000 * 3
+        public static let eventListPages = 100
+        public static let replayLimitMs = 60 * 60 * 1_000
 
         /// Version negotiation strategy derived from `McpSchema.WireProtocol` and startup timeout.
         public enum VersionNegotiation: Equatable, Hashable, Sendable {
@@ -1126,21 +1224,47 @@ public enum CoreMCP {
             status == 408 || status == 429 || (status >= 500 && status != 501)
         }
 
-        // parity: core/src/mcp/client.ts#EventType [status=implemented hash=cdd68afbdad3]
+        // parity: core/src/mcp/client.ts#EventType [status=implemented hash=e4cf5da9d287]
         public struct EventType: Equatable, Hashable, Sendable, Codable {
             public let name: String
             public let description: String?
-            public let delivery: [String]?
-            public let inputSchema: [String: JSONValue]?
-            public let payloadSchema: [String: JSONValue]?
+            /// Any of "poll", "push" and "webhook"; modes added later pass through. Must be non-empty.
+            public let delivery: [String]
+            public let inputSchema: [String: JSONValue]
+            public let payloadSchema: [String: JSONValue]
 
             public init(
                 name: String,
                 description: String? = nil,
-                delivery: [String]? = nil,
-                inputSchema: [String: JSONValue]? = nil,
-                payloadSchema: [String: JSONValue]? = nil
+                delivery: [String] = ["push"],
+                inputSchema: [String: JSONValue] = [:],
+                payloadSchema: [String: JSONValue] = [:]
             ) {
+                self.name = name
+                self.description = description
+                self.delivery = delivery
+                self.inputSchema = inputSchema
+                self.payloadSchema = payloadSchema
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name, description, delivery, inputSchema, payloadSchema
+            }
+
+            public init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let name = try container.decode(String.self, forKey: .name)
+                let description = try container.decodeIfPresent(String.self, forKey: .description)
+                let delivery = try container.decode([String].self, forKey: .delivery)
+                guard !delivery.isEmpty else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .delivery,
+                        in: container,
+                        debugDescription: "EventType.delivery must be non-empty"
+                    )
+                }
+                let inputSchema = try container.decode([String: JSONValue].self, forKey: .inputSchema)
+                let payloadSchema = try container.decode([String: JSONValue].self, forKey: .payloadSchema)
                 self.name = name
                 self.description = description
                 self.delivery = delivery
@@ -1162,12 +1286,413 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#EventMessage [status=implemented hash=1053da804866]
+        // parity: core/src/mcp/client.ts#EventMessage [status=implemented hash=e32ae81b2d25]
         public enum EventMessage: Equatable, Hashable, Sendable {
             case active(cursor: String?, truncated: Bool)
-            case event(eventId: String, name: String, timestamp: String, data: JSONValue, cursor: String?)
+            case event(eventId: String, name: String, timestamp: String, data: [String: JSONValue], cursor: String?)
             case heartbeat(cursor: String?)
             case error(EventError)
+        }
+
+        // MARK: SEP-2243 `x-mcp-header` Mirroring & Fail-Closed Schema Matching
+
+        public struct HeaderParam: Equatable, Hashable, Sendable {
+            public let path: [String]
+            public let header: String
+
+            public init(path: [String], header: String) {
+                self.path = path
+                self.header = header
+            }
+        }
+
+        private static let headerTypes: Set<String> = ["string", "integer", "boolean"]
+        private static let unreachableSchemaKeys: Set<String> = [
+            "items",
+            "prefixItems",
+            "contains",
+            "additionalProperties",
+            "unevaluatedProperties",
+            "unevaluatedItems",
+            "propertyNames",
+            "patternProperties",
+            "dependentSchemas",
+            "oneOf",
+            "anyOf",
+            "allOf",
+            "not",
+            "if",
+            "then",
+            "else",
+            "$defs",
+            "definitions",
+        ]
+        private static let unreachableMapKeys: Set<String> = [
+            "patternProperties",
+            "dependentSchemas",
+            "$defs",
+            "definitions",
+        ]
+
+        private static func isValidHeaderToken(_ token: String) -> Bool {
+            guard !token.isEmpty else { return false }
+            for b in token.utf8 {
+                let ok =
+                    (b >= 0x30 && b <= 0x39) || // 0-9
+                    (b >= 0x41 && b <= 0x5A) || // A-Z
+                    (b >= 0x61 && b <= 0x7A) || // a-z
+                    b == 0x21 || b == 0x23 || b == 0x24 || b == 0x25 || b == 0x26 ||
+                    b == 0x27 || b == 0x2A || b == 0x2B || b == 0x2D || b == 0x2E ||
+                    b == 0x5E || b == 0x5F || b == 0x60 || b == 0x7C || b == 0x7E
+                if !ok { return false }
+            }
+            return true
+        }
+
+        /// Extracts SEP-2243 `x-mcp-header` annotations from an input schema, or returns an error description if invalid.
+        public static func headerParams(_ schema: [String: JSONValue]) -> Result<[HeaderParam], PlatformError> {
+            var params: [HeaderParam] = []
+            var seen = Set<String>()
+
+            func visit(_ node: JSONValue, path: [String], reachable: Bool) -> String? {
+                if case .array(let list) = node {
+                    for child in list {
+                        if let fault = visit(child, path: path, reachable: false) {
+                            return fault
+                        }
+                    }
+                    return nil
+                }
+                guard case .object(let obj) = node else { return nil }
+                if let headerVal = obj["x-mcp-header"] {
+                    let at = path.isEmpty ? "<root>" : path.joined(separator: ".")
+                    if !reachable || path.isEmpty {
+                        return "\(at): x-mcp-header is only allowed on a property reached through properties"
+                    }
+                    guard case .string(let header) = headerVal, isValidHeaderToken(header) else {
+                        return "\(at): x-mcp-header is not a valid header name"
+                    }
+                    guard case .string(let typeStr) = obj["type"], headerTypes.contains(typeStr) else {
+                        return "\(at): x-mcp-header needs a string, integer or boolean type"
+                    }
+                    let lowered = header.lowercased()
+                    if seen.contains(lowered) {
+                        return "\(at): x-mcp-header \(header) is declared twice"
+                    }
+                    seen.insert(lowered)
+                    params.append(HeaderParam(path: path, header: header))
+                }
+                if case .object(let props) = obj["properties"] {
+                    for (key, child) in props.sorted(by: { $0.key < $1.key }) {
+                        if let fault = visit(child, path: path + [key], reachable: reachable) {
+                            return fault
+                        }
+                    }
+                }
+                for (key, child) in obj.sorted(by: { $0.key < $1.key }) {
+                    guard unreachableSchemaKeys.contains(key) else { continue }
+                    let targetNode: JSONValue
+                    if unreachableMapKeys.contains(key), case .object(let map) = child {
+                        targetNode = .array(map.sorted(by: { $0.key < $1.key }).map(\.value))
+                    } else {
+                        targetNode = child
+                    }
+                    if let fault = visit(targetNode, path: path, reachable: false) {
+                        return fault
+                    }
+                }
+                return nil
+            }
+
+            if let fault = visit(.object(schema), path: [], reachable: true) {
+                return .failure(.ioFailure(fault))
+            }
+            return .success(params)
+        }
+
+        private static func isPlainHeaderValue(_ text: String) -> Bool {
+            guard !text.isEmpty else { return false }
+            if text != text.trimmingCharacters(in: .whitespacesAndNewlines) { return false }
+            for scalar in text.unicodeScalars {
+                let v = scalar.value
+                if !(v == 0x09 || (v >= 0x20 && v <= 0x7E)) { return false }
+            }
+            if text.hasPrefix("=?base64?") && text.hasSuffix("?=") { return false }
+            return true
+        }
+
+        /// Mirrors annotated primitive arguments into `Mcp-Param-<header>` HTTP headers (base64-encoding non-plain values).
+        public static func paramHeaders(_ params: [HeaderParam], arguments: [String: JSONValue]?) -> [String: String] {
+            guard let arguments else { return [:] }
+            let root: JSONValue = .object(arguments)
+            var out: [String: String] = [:]
+            let maxSafeInt: Int64 = 9_007_199_254_740_991 // 2^53 - 1
+            for param in params {
+                var cursor: JSONValue? = root
+                for segment in param.path {
+                    if case .object(let obj) = cursor {
+                        cursor = obj[segment]
+                    } else {
+                        cursor = nil
+                        break
+                    }
+                }
+                let text: String?
+                switch cursor {
+                case .string(let s)?:
+                    text = s
+                case .bool(let b)?:
+                    text = b ? "true" : "false"
+                case .int(let i)?:
+                    text = (abs(i) <= maxSafeInt) ? String(i) : nil
+                case .double(let d)?:
+                    if !d.isFinite {
+                        text = nil
+                    } else if d.rounded() == d {
+                        if abs(d) <= Double(maxSafeInt) {
+                            text = String(Int64(d))
+                        } else {
+                            text = nil
+                        }
+                    } else {
+                        text = String(d)
+                    }
+                default:
+                    text = nil
+                }
+                guard let text else { continue }
+                let value = isPlainHeaderValue(text)
+                    ? text
+                    : "=?base64?\(Data(text.utf8).base64EncodedString())?="
+                out["Mcp-Param-\(param.header)"] = value
+            }
+            return out
+        }
+
+        /// Validates ISO-8601 timestamps matching upstream's `ISO_8601` regex:
+        /// `/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d+)?)?(Z|[+-](0\d|1[0-4]):[0-5]\d)$/`
+        public static func isValidISO8601Timestamp(_ text: String) -> Bool {
+            let bytes = Array(text.utf8)
+            func isDigit(_ b: UInt8) -> Bool { b >= 0x30 && b <= 0x39 }
+            func twoDigits(_ i: Int) -> Int? {
+                guard i + 1 < bytes.count, isDigit(bytes[i]), isDigit(bytes[i + 1]) else { return nil }
+                return Int(bytes[i] - 0x30) * 10 + Int(bytes[i + 1] - 0x30)
+            }
+            // Minimum length: YYYY-MM-DDTHH:MMZ = 17
+            guard bytes.count >= 17 else { return false }
+            for i in 0..<4 { guard isDigit(bytes[i]) else { return false } }
+            guard bytes[4] == 0x2D, let month = twoDigits(5), (1...12).contains(month) else { return false }
+            guard bytes[7] == 0x2D, let day = twoDigits(8), (1...31).contains(day) else { return false }
+            guard bytes[10] == 0x54, let hour = twoDigits(11), (0...23).contains(hour) else { return false }
+            guard bytes[13] == 0x3A, let minute = twoDigits(14), (0...59).contains(minute) else { return false }
+            var idx = 16
+            if idx < bytes.count && bytes[idx] == 0x3A {
+                idx += 1
+                guard let second = twoDigits(idx), (0...59).contains(second) else { return false }
+                idx += 2
+                if idx < bytes.count && bytes[idx] == 0x2E {
+                    idx += 1
+                    let fracStart = idx
+                    while idx < bytes.count && isDigit(bytes[idx]) { idx += 1 }
+                    guard idx > fracStart else { return false }
+                }
+            }
+            guard idx < bytes.count else { return false }
+            if bytes[idx] == 0x5A { // 'Z'
+                return idx + 1 == bytes.count
+            }
+            if bytes[idx] == 0x2B || bytes[idx] == 0x2D { // '+' or '-'
+                idx += 1
+                guard let tzHour = twoDigits(idx), (0...14).contains(tzHour) else { return false }
+                idx += 2
+                guard idx < bytes.count && bytes[idx] == 0x3A else { return false }
+                idx += 1
+                guard let tzMin = twoDigits(idx), (0...59).contains(tzMin) else { return false }
+                idx += 2
+                return idx == bytes.count
+            }
+            return false
+        }
+
+        /// Fail-closed JSON Schema validator matching upstream `matcher(schema)` (`onExcessProperty: "error"`).
+        /// Returns `nil` when the schema uses unsupported keywords so callers fail closed.
+        public static func compileSchemaMatcher(_ schema: [String: JSONValue]) -> (@Sendable (JSONValue) -> Bool)? {
+            let unsupported: Set<String> = [
+                "$ref", "$dynamicRef", "$defs", "definitions", "patternProperties",
+                "not", "if", "then", "else", "dependentSchemas", "dependentRequired",
+                "unevaluatedProperties", "unevaluatedItems", "contains",
+            ]
+            if containsUnsupportedSchemaKeyword(schema, unsupported: unsupported) {
+                return nil
+            }
+            return { value in
+                validateSchemaValue(value, against: schema)
+            }
+        }
+
+        private static func containsUnsupportedSchemaKeyword(
+            _ schema: [String: JSONValue],
+            unsupported: Set<String>
+        ) -> Bool {
+            for (k, v) in schema {
+                if unsupported.contains(k) { return true }
+                if k == "properties", case .object(let props) = v {
+                    for (_, propSchema) in props {
+                        if case .object(let nested) = propSchema,
+                           containsUnsupportedSchemaKeyword(nested, unsupported: unsupported) {
+                            return true
+                        }
+                    }
+                } else if k == "items", case .object(let itemSchema) = v {
+                    if containsUnsupportedSchemaKeyword(itemSchema, unsupported: unsupported) { return true }
+                } else if k == "additionalProperties", case .object(let addSchema) = v {
+                    if containsUnsupportedSchemaKeyword(addSchema, unsupported: unsupported) { return true }
+                } else if (k == "anyOf" || k == "oneOf" || k == "allOf"), case .array(let list) = v {
+                    for entry in list {
+                        if case .object(let nested) = entry,
+                           containsUnsupportedSchemaKeyword(nested, unsupported: unsupported) {
+                            return true
+                        }
+                    }
+                }
+            }
+            return false
+        }
+
+        private static func validateSchemaValue(_ value: JSONValue, against schema: [String: JSONValue]) -> Bool {
+            if let constVal = schema["const"], value != constVal { return false }
+            if case .array(let enumVals) = schema["enum"], !enumVals.contains(value) { return false }
+            if case .array(let all) = schema["allOf"] {
+                for sub in all {
+                    guard case .object(let subObj) = sub, validateSchemaValue(value, against: subObj) else { return false }
+                }
+            }
+            if case .array(let any) = schema["anyOf"] {
+                let matched = any.contains { sub in
+                    guard case .object(let subObj) = sub else { return false }
+                    return validateSchemaValue(value, against: subObj)
+                }
+                if !matched { return false }
+            }
+            if case .array(let one) = schema["oneOf"] {
+                var count = 0
+                for sub in one {
+                    if case .object(let subObj) = sub, validateSchemaValue(value, against: subObj) {
+                        count += 1
+                    }
+                }
+                if count != 1 { return false }
+            }
+
+            if let typeNode = schema["type"] {
+                let allowedTypes: [String]
+                switch typeNode {
+                case .string(let t): allowedTypes = [t]
+                case .array(let arr): allowedTypes = arr.compactMap { if case .string(let s) = $0 { s } else { nil } }
+                default: allowedTypes = []
+                }
+                if !allowedTypes.isEmpty && !allowedTypes.contains(where: { matchesSchemaType(value, type: $0) }) {
+                    return false
+                }
+            }
+
+            switch value {
+            case .object(let obj):
+                if case .array(let req) = schema["required"] {
+                    for entry in req {
+                        if case .string(let key) = entry, obj[key] == nil { return false }
+                    }
+                }
+                let props: [String: JSONValue]? = if case .object(let p) = schema["properties"] { p } else { nil }
+                for (key, val) in obj {
+                    if let propSchema = props?[key] {
+                        guard case .object(let subObj) = propSchema, validateSchemaValue(val, against: subObj) else {
+                            return false
+                        }
+                    } else if let add = schema["additionalProperties"] {
+                        switch add {
+                        case .bool(true):
+                            continue
+                        case .bool(false):
+                            return false
+                        case .object(let addObj):
+                            guard validateSchemaValue(val, against: addObj) else { return false }
+                        default:
+                            return false
+                        }
+                    } else if props != nil {
+                        return false
+                    }
+                }
+            case .array(let arr):
+                if case .object(let itemSchema) = schema["items"] {
+                    for elem in arr {
+                        guard validateSchemaValue(elem, against: itemSchema) else { return false }
+                    }
+                }
+            case .string(let str):
+                if let minLen = schemaIntValue(schema["minLength"]), str.utf16.count < minLen { return false }
+                if let maxLen = schemaIntValue(schema["maxLength"]), str.utf16.count > maxLen { return false }
+            case .int(let n):
+                let d = Double(n)
+                if let minVal = schemaDoubleValue(schema["minimum"]), d < minVal { return false }
+                if let maxVal = schemaDoubleValue(schema["maximum"]), d > maxVal { return false }
+            case .double(let d):
+                if let minVal = schemaDoubleValue(schema["minimum"]), d < minVal { return false }
+                if let maxVal = schemaDoubleValue(schema["maximum"]), d > maxVal { return false }
+            case .bool, .null:
+                break
+            }
+            return true
+        }
+
+        private static func matchesSchemaType(_ value: JSONValue, type: String) -> Bool {
+            switch type {
+            case "object":
+                if case .object = value { return true }
+                return false
+            case "array":
+                if case .array = value { return true }
+                return false
+            case "string":
+                if case .string = value { return true }
+                return false
+            case "boolean":
+                if case .bool = value { return true }
+                return false
+            case "null":
+                if case .null = value { return true }
+                return false
+            case "integer":
+                switch value {
+                case .int: return true
+                case .double(let d): return d.isFinite && d.rounded() == d
+                default: return false
+                }
+            case "number":
+                switch value {
+                case .int, .double: return true
+                default: return false
+                }
+            default:
+                return false
+            }
+        }
+
+        private static func schemaIntValue(_ value: JSONValue?) -> Int? {
+            switch value {
+            case .int(let n)?: return Int(n)
+            case .double(let d)? where d.isFinite: return Int(d)
+            default: return nil
+            }
+        }
+
+        private static func schemaDoubleValue(_ value: JSONValue?) -> Double? {
+            switch value {
+            case .int(let n)?: return Double(n)
+            case .double(let d)? where d.isFinite: return d
+            default: return nil
+            }
         }
 
         // parity: core/src/mcp/client.ts#ResourceTemplate [status=implemented hash=0496e6bf922e]
@@ -1408,14 +1933,33 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#Events [status=implemented hash=d215db3a42ce]
+        // parity: core/src/mcp/client.ts#Events [status=implemented hash=fc27dbae2a0b]
         public protocol Events: Sendable {
             func list() async throws -> [EventType]
+            func check(name: String, arguments: [String: JSONValue]?) async throws
             func stream(
                 name: String,
                 arguments: [String: JSONValue]?,
-                cursor: String?
+                cursor: String?,
+                maxAgeMs: Int?
             ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error>
+        }
+
+        internal struct KnownEventType: Sendable {
+            let type: EventType
+            let headers: [HeaderParam]
+            let arguments: @Sendable (JSONValue) -> Bool
+            let data: @Sendable (JSONValue) -> Bool
+        }
+
+        internal static func compileKnownEventType(_ type: EventType) -> KnownEventType? {
+            guard case .success(let headers) = headerParams(type.inputSchema) else { return nil }
+            guard let argMatcher = compileSchemaMatcher(type.inputSchema),
+                  let dataMatcher = compileSchemaMatcher(type.payloadSchema)
+            else {
+                return nil
+            }
+            return KnownEventType(type: type, headers: headers, arguments: argMatcher, data: dataMatcher)
         }
 
         /// Bus-backed `CoreMCP.Client.Events` producer bridging `McpEventSchema.ExperimentalEvent`
@@ -1426,6 +1970,7 @@ public enum CoreMCP {
             public let bus: CoreBus.Service
             public let location: OpenCodeLocation?
             public let initialCursor: String?
+            private let compiled: [String: KnownEventType]
 
             public init(
                 server: String,
@@ -1439,18 +1984,45 @@ public enum CoreMCP {
                 self.bus = bus
                 self.location = location
                 self.initialCursor = initialCursor
+                var map: [String: KnownEventType] = [:]
+                for t in types {
+                    if let known = Client.compileKnownEventType(t) {
+                        map[t.name] = known
+                    }
+                }
+                self.compiled = map
             }
 
             public func list() async throws -> [EventType] {
-                types
+                types.filter { compiled[$0.name] != nil }
+            }
+
+            public func check(name: String, arguments: [String: JSONValue]?) async throws {
+                guard let known = compiled[name], known.type.delivery.contains("push") else {
+                    throw EventStreamRejectedError(
+                        server: server,
+                        code: -32023,
+                        message: "No push event type \(name) on MCP server \(server)"
+                    )
+                }
+                guard known.arguments(.object(arguments ?? [:])) else {
+                    throw EventStreamRejectedError(
+                        server: server,
+                        code: -32602,
+                        message: "Arguments for \(name) do not match its inputSchema"
+                    )
+                }
             }
 
             public func stream(
                 name: String,
                 arguments: [String: JSONValue]?,
-                cursor: String?
+                cursor: String?,
+                maxAgeMs: Int?
             ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error> {
-                _ = arguments
+                _ = maxAgeMs
+                try await check(name: name, arguments: arguments)
+                let dataMatcher = compiled[name]?.data
                 // Subscribe synchronously BEFORE returning so no bus event published right after open is missed.
                 let busStream = bus.subscribe(
                     types: Set([McpEventSchema.ExperimentalEvent.type]),
@@ -1472,11 +2044,13 @@ public enum CoreMCP {
                                 continuation.yield(.active(cursor: decoded.cursor, truncated: true))
                                 continue
                             }
+                            guard case .object(let dataObj) = decoded.data else { continue }
+                            if let dataMatcher, !dataMatcher(.object(dataObj)) { continue }
                             continuation.yield(.event(
                                 eventId: decoded.eventId,
                                 name: decoded.name,
                                 timestamp: decoded.timestamp,
-                                data: decoded.data,
+                                data: dataObj,
                                 cursor: decoded.cursor
                             ))
                         }
@@ -1489,7 +2063,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/client.ts#Connection [status=implemented hash=c9459625f817]
+        // parity: core/src/mcp/client.ts#Connection [status=implemented hash=0f9835ce1550]
         public protocol Connection: Sendable {
             var modern: Bool { get }
             var protocolVersion: String? { get }
@@ -1511,33 +2085,45 @@ public enum CoreMCP {
             func close() async throws
         }
 
-        // parity: core/src/mcp/client.ts#Attached [status=implemented hash=6cdc9837abf4]
+        // parity: core/src/mcp/client.ts#Attached [status=implemented hash=e138ef69cfa8]
         public struct Attached: Sendable {
             public let server: String
             public let transport: any Transport
+            /// Defaults to `.legacy`: attached clients run ordinary SDK servers over the initialize handshake.
+            public let wireProtocol: McpSchema.WireProtocol?
             public let elicitation: ElicitationHandler?
 
-            public init(server: String, transport: any Transport, elicitation: ElicitationHandler? = nil) {
+            public init(
+                server: String,
+                transport: any Transport,
+                wireProtocol: McpSchema.WireProtocol? = nil,
+                elicitation: ElicitationHandler? = nil
+            ) {
                 self.server = server
                 self.transport = transport
+                self.wireProtocol = wireProtocol
                 self.elicitation = elicitation
             }
         }
 
-        // parity: core/src/mcp/client.ts#ConnectOptions [status=implemented hash=fd11d7fbe89e]
+        // parity: core/src/mcp/client.ts#ConnectOptions [status=implemented hash=2e7484131386]
         public struct ConnectOptions: Sendable {
             public let server: String
             public let config: McpSchema.ServerConfig
             public let directory: String
             public let clientInfo: (name: String, version: String)
             public let roots: Bool
+            /// Experimental: declares MCP Events, a beta extension, and exposes `Connection.events` for a 2026-07-28 server that offers them.
             public let events: Bool
             public let elicitation: ElicitationHandler
             public let transportOverride: (any Transport)?
+            public let attachedProtocol: McpSchema.WireProtocol?
             public let http: (any HTTPTransport)?
             public let spawner: (any ProcessSpawner)?
             public let bearerTokenProvider: (@Sendable () async throws -> String?)?
             public let probeTimeoutMs: Int
+            public let ungrantedSilenceMs: Int64
+            public let sleep: (@Sendable (Int64) async throws -> Void)?
 
             public init(
                 server: String,
@@ -1548,10 +2134,13 @@ public enum CoreMCP {
                 events: Bool = false,
                 elicitation: ElicitationHandler = ElicitationHandler(),
                 transportOverride: (any Transport)? = nil,
+                attachedProtocol: McpSchema.WireProtocol? = nil,
                 http: (any HTTPTransport)? = nil,
                 spawner: (any ProcessSpawner)? = nil,
                 bearerTokenProvider: (@Sendable () async throws -> String?)? = nil,
-                probeTimeoutMs: Int = Client.probeTimeoutMs
+                probeTimeoutMs: Int = Client.probeTimeoutMs,
+                ungrantedSilenceMs: Int64 = Client.ungrantedSilenceMs,
+                sleep: (@Sendable (Int64) async throws -> Void)? = nil
             ) {
                 self.server = server
                 self.config = config
@@ -1561,19 +2150,443 @@ public enum CoreMCP {
                 self.events = events
                 self.elicitation = elicitation
                 self.transportOverride = transportOverride
+                self.attachedProtocol = attachedProtocol
                 self.http = http
                 self.spawner = spawner
                 self.bearerTokenProvider = bearerTokenProvider
                 self.probeTimeoutMs = probeTimeoutMs
+                self.ungrantedSilenceMs = ungrantedSilenceMs
+                self.sleep = sleep
             }
         }
 
         /// Concrete JSON-RPC 2.0 MCP client connection managing request correlation, notifications,
-        /// `initialize` handshake, and tool/prompt/resource calls over any `CoreMCP.Transport`.
+        /// `initialize` handshake, MCP Events (`events/list`, `events/stream`, `subscriptions/listen`),
+        /// and tool/prompt/resource calls over any `CoreMCP.Transport`.
         public final class LiveConnection: Connection, Sendable {
+            private final class OpenEventStream: Sendable {
+                private struct State: Sendable {
+                    var silenceMs: Int64
+                    var watchdogTask: Task<Void, Never>?
+                    var closed = false
+                    var requestID: JSONRPCID?
+                }
+
+                let server: String
+                let expectedEventName: String
+                let continuation: AsyncThrowingStream<EventMessage, Swift.Error>.Continuation
+                let sleep: (@Sendable (Int64) async throws -> Void)?
+                let validateData: @Sendable ([String: JSONValue]) -> Bool
+                let onTimeout: @Sendable (JSONRPCID?) -> Void
+                private let state: Mutex<State>
+
+                init(
+                    server: String,
+                    expectedEventName: String,
+                    ungrantedSilenceMs: Int64,
+                    continuation: AsyncThrowingStream<EventMessage, Swift.Error>.Continuation,
+                    sleep: (@Sendable (Int64) async throws -> Void)?,
+                    validateData: @escaping @Sendable ([String: JSONValue]) -> Bool,
+                    onTimeout: @escaping @Sendable (JSONRPCID?) -> Void
+                ) {
+                    self.server = server
+                    self.expectedEventName = expectedEventName
+                    self.continuation = continuation
+                    self.sleep = sleep
+                    self.validateData = validateData
+                    self.onTimeout = onTimeout
+                    self.state = Mutex(State(silenceMs: ungrantedSilenceMs))
+                }
+
+                func setRequestID(_ id: JSONRPCID) {
+                    state.withLock { $0.requestID = id }
+                }
+
+                private func handleWatchdogExpired() {
+                    let outcome: (expired: Bool, reqID: JSONRPCID?) = state.withLock { s in
+                        if s.closed { return (false, nil) }
+                        s.closed = true
+                        s.watchdogTask = nil
+                        return (true, s.requestID)
+                    }
+                    guard outcome.expired else { return }
+                    continuation.finish(
+                        throwing: PlatformError.ioFailure(
+                            "MCP server \(server) stopped sending event stream heartbeats"
+                        )
+                    )
+                    onTimeout(outcome.reqID)
+                }
+
+                func armWatchdog(updateSilenceMs: Int64? = nil) {
+                    let (old, delay, isClosed): (Task<Void, Never>?, Int64, Bool) = state.withLock { s in
+                        if s.closed { return (nil, 0, true) }
+                        if let ms = updateSilenceMs { s.silenceMs = ms }
+                        let prev = s.watchdogTask
+                        return (prev, s.silenceMs, false)
+                    }
+                    old?.cancel()
+                    guard !isClosed else { return }
+                    let customSleep = self.sleep
+                    let task = Task<Void, Never> { [weak self] in
+                        do {
+                            if let customSleep {
+                                try await customSleep(delay)
+                            } else {
+                                try await Task.sleep(for: .milliseconds(max(0, delay)))
+                            }
+                        } catch {
+                            return
+                        }
+                        if Task.isCancelled { return }
+                        self?.handleWatchdogExpired()
+                    }
+                    let shouldCancel = state.withLock { s -> Bool in
+                        if s.closed { return true }
+                        s.watchdogTask = task
+                        return false
+                    }
+                    if shouldCancel { task.cancel() }
+                }
+
+                func deliver(_ message: EventMessage, grantedHeartbeatMs: Int? = nil) {
+                    let updatedSilence = grantedHeartbeatMs.map { Int64($0) * Int64(Client.missedHeartbeats) }
+                    armWatchdog(updateSilenceMs: updatedSilence)
+                    let closed = state.withLock { $0.closed }
+                    guard !closed else { return }
+                    if case .event(_, let evName, _, let data, _) = message {
+                        guard evName == expectedEventName && validateData(data) else {
+                            return
+                        }
+                    }
+                    continuation.yield(message)
+                }
+
+                func fail(_ error: any Swift.Error) {
+                    let old: Task<Void, Never>? = state.withLock { s in
+                        if s.closed { return nil }
+                        s.closed = true
+                        let w = s.watchdogTask
+                        s.watchdogTask = nil
+                        return w
+                    }
+                    old?.cancel()
+                    continuation.finish(throwing: error)
+                }
+
+                func finish() {
+                    let old: Task<Void, Never>? = state.withLock { s in
+                        if s.closed { return nil }
+                        s.closed = true
+                        let w = s.watchdogTask
+                        s.watchdogTask = nil
+                        return w
+                    }
+                    old?.cancel()
+                    continuation.finish()
+                }
+            }
+
+            private actor RefreshLock {
+                private var busy = false
+                private var waiters: [CheckedContinuation<Void, Never>] = []
+
+                func withPermit<T: Sendable>(_ operation: @Sendable () async throws -> T) async rethrows -> T {
+                    while busy {
+                        await withCheckedContinuation { cont in
+                            waiters.append(cont)
+                        }
+                    }
+                    busy = true
+                    defer {
+                        busy = false
+                        if !waiters.isEmpty {
+                            let next = waiters.removeFirst()
+                            next.resume()
+                        }
+                    }
+                    return try await operation()
+                }
+            }
+
+            private final class LiveEvents: Events, Sendable {
+                private unowned let connection: LiveConnection
+                private let server: String
+                private let ungrantedSilenceMs: Int64
+                private let sleep: (@Sendable (Int64) async throws -> Void)?
+                private let refreshLock = RefreshLock()
+                private let catalog = Mutex<[String: KnownEventType]>([:])
+
+                init(
+                    connection: LiveConnection,
+                    server: String,
+                    ungrantedSilenceMs: Int64,
+                    sleep: (@Sendable (Int64) async throws -> Void)?
+                ) {
+                    self.connection = connection
+                    self.server = server
+                    self.ungrantedSilenceMs = ungrantedSilenceMs
+                    self.sleep = sleep
+                }
+
+                func headersFor(name: String) -> [HeaderParam] {
+                    catalog.withLock { $0[name]?.headers ?? [] }
+                }
+
+                func dataMatcher(name: String) -> (@Sendable (JSONValue) -> Bool)? {
+                    catalog.withLock { $0[name]?.data }
+                }
+
+                func list() async throws -> [EventType] {
+                    try await refreshLock.withPermit { [self] in
+                        var rawEvents: [JSONValue] = []
+                        var cursor: String? = nil
+                        for _ in 0..<Client.eventListPages {
+                            let params: JSONValue = cursor.map { .object(["cursor": .string($0)]) } ?? .object([:])
+                            let result = try await self.connection.sendRequest(method: "events/list", params: params)
+                            guard case .object(let obj) = result else { break }
+                            if case .array(let pageEvents) = obj["events"] {
+                                rawEvents.append(contentsOf: pageEvents)
+                            }
+                            if case .string(let next) = obj["nextCursor"] {
+                                cursor = next
+                            } else {
+                                cursor = nil
+                                break
+                            }
+                        }
+                        let encoder = JSONEncoder()
+                        let decoder = JSONDecoder()
+                        var known: [String: KnownEventType] = [:]
+                        var ordered: [EventType] = []
+                        for raw in rawEvents {
+                            guard let data = try? encoder.encode(raw),
+                                  let decoded = try? decoder.decode(EventType.self, from: data),
+                                  let compiled = Client.compileKnownEventType(decoded)
+                            else {
+                                continue
+                            }
+                            if known[decoded.name] == nil {
+                                ordered.append(decoded)
+                            } else if let idx = ordered.firstIndex(where: { $0.name == decoded.name }) {
+                                ordered[idx] = decoded
+                            }
+                            known[decoded.name] = compiled
+                        }
+                        self.catalog.withLock { $0 = known }
+                        return ordered
+                    }
+                }
+
+                func check(name: String, arguments: [String: JSONValue]?) async throws {
+                    let hasEntry = catalog.withLock { $0[name] != nil }
+                    if !hasEntry {
+                        _ = try await list()
+                    }
+                    let known = catalog.withLock { $0[name] }
+                    guard let known, known.type.delivery.contains("push") else {
+                        throw EventStreamRejectedError(
+                            server: server,
+                            code: -32023,
+                            message: "No push event type \(name) on MCP server \(server)"
+                        )
+                    }
+                    guard known.arguments(.object(arguments ?? [:])) else {
+                        throw EventStreamRejectedError(
+                            server: server,
+                            code: -32602,
+                            message: "Arguments for \(name) do not match its inputSchema"
+                        )
+                    }
+                }
+
+                func stream(
+                    name: String,
+                    arguments: [String: JSONValue]?,
+                    cursor: String?,
+                    maxAgeMs: Int?
+                ) async throws -> AsyncThrowingStream<EventMessage, Swift.Error> {
+                    try await check(name: name, arguments: arguments)
+                    let conn = self.connection
+                    let server = self.server
+                    let ungranted = self.ungrantedSilenceMs
+                    let sleepFn = self.sleep
+                    return AsyncThrowingStream { continuation in
+                        let openStream = OpenEventStream(
+                            server: server,
+                            expectedEventName: name,
+                            ungrantedSilenceMs: ungranted,
+                            continuation: continuation,
+                            sleep: sleepFn,
+                            validateData: { [weak self] dataObj in
+                                self?.dataMatcher(name: name)?(.object(dataObj)) == true
+                            },
+                            onTimeout: { [weak conn] reqID in
+                                guard let conn, let reqID else { return }
+                                conn.unregisterEventStream(id: reqID)
+                                Task {
+                                    try? await conn.sendNotification(
+                                        method: "notifications/cancelled",
+                                        params: .object(["requestId": Self.jsonValue(for: reqID)])
+                                    )
+                                }
+                            }
+                        )
+
+                        let streamTask = Task<Void, Never> { [weak self, weak conn] in
+                            guard let self, let conn else {
+                                openStream.finish()
+                                return
+                            }
+                            openStream.armWatchdog()
+
+                            var paramsDict: [String: JSONValue] = ["name": .string(name)]
+                            if let arguments {
+                                paramsDict["arguments"] = .object(arguments)
+                            }
+                            if let cursor {
+                                paramsDict["cursor"] = .string(cursor)
+                                let effectiveMaxAge = maxAgeMs ?? Client.replayLimitMs
+                                paramsDict["maxAgeMs"] = .int(Int64(effectiveMaxAge))
+                            } else if let maxAgeMs {
+                                paramsDict["maxAgeMs"] = .int(Int64(maxAgeMs))
+                            }
+                            let paramsVal = JSONValue.object(paramsDict)
+
+                            @Sendable func runOnce() async throws -> JSONValue {
+                                var hdrs = Client.paramHeaders(self.headersFor(name: name), arguments: arguments)
+                                hdrs["Mcp-Name"] = name
+                                return try await conn.sendRequest(
+                                    method: "events/stream",
+                                    params: paramsVal,
+                                    headers: hdrs,
+                                    onRequestID: { reqID in
+                                        openStream.setRequestID(reqID)
+                                        conn.registerEventStream(id: reqID, stream: openStream)
+                                    }
+                                )
+                            }
+
+                            var currentReqID: JSONRPCID? = nil
+                            do {
+                                do {
+                                    _ = try await runOnce()
+                                } catch let rpcErr as JSONRPCErrorObject where rpcErr.code == Client.headerMismatchCode {
+                                    // A modern server rejects headers mirrored from a stale or unlisted event type before
+                                    // opening the stream, so relist and retry once with the fresh schema.
+                                    conn.unregisterEventStream(matching: openStream)
+                                    _ = try await self.list()
+                                    _ = try await runOnce()
+                                }
+                                conn.unregisterEventStream(matching: openStream)
+                                openStream.finish()
+                            } catch is CancellationError {
+                                currentReqID = conn.unregisterEventStream(matching: openStream)
+                                if let currentReqID {
+                                    try? await conn.sendNotification(
+                                        method: "notifications/cancelled",
+                                        params: .object(["requestId": Self.jsonValue(for: currentReqID)])
+                                    )
+                                }
+                                openStream.finish()
+                            } catch let rejected as EventStreamRejectedError {
+                                conn.unregisterEventStream(matching: openStream)
+                                openStream.fail(rejected)
+                            } catch let rpcErr as JSONRPCErrorObject where Client.eventStreamRejectedCodes.contains(rpcErr.code) {
+                                conn.unregisterEventStream(matching: openStream)
+                                openStream.fail(EventStreamRejectedError(server: server, code: rpcErr.code, message: rpcErr.message))
+                            } catch {
+                                conn.unregisterEventStream(matching: openStream)
+                                openStream.fail(error)
+                            }
+                        }
+
+                        continuation.onTermination = { [weak conn] _ in
+                            let reqID = conn?.unregisterEventStream(matching: openStream)
+                            openStream.finish()
+                            streamTask.cancel()
+                            if let conn, let reqID {
+                                Task {
+                                    try? await conn.sendNotification(
+                                        method: "notifications/cancelled",
+                                        params: .object(["requestId": Self.jsonValue(for: reqID)])
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                private static func jsonValue(for id: JSONRPCID) -> JSONValue {
+                    switch id {
+                    case .int(let i): return .int(i)
+                    case .string(let s): return .string(s)
+                    }
+                }
+            }
+
+            private final class CoalescingSignal: Sendable {
+                private struct State: Sendable {
+                    var pending = false
+                    var closed = false
+                    var waiter: CheckedContinuation<Bool, Never>?
+                }
+
+                private let state = Mutex(State())
+
+                func offer() {
+                    let waiter: CheckedContinuation<Bool, Never>? = state.withLock { s in
+                        if s.closed { return nil }
+                        if let w = s.waiter {
+                            s.waiter = nil
+                            return w
+                        }
+                        s.pending = true
+                        return nil
+                    }
+                    waiter?.resume(returning: true)
+                }
+
+                func take() async -> Bool {
+                    await withTaskCancellationHandler {
+                        await withCheckedContinuation { cont in
+                            let immediate: Bool? = state.withLock { s in
+                                if s.closed { return false }
+                                if s.pending {
+                                    s.pending = false
+                                    return true
+                                }
+                                s.waiter = cont
+                                return nil
+                            }
+                            if let immediate { cont.resume(returning: immediate) }
+                        }
+                    } onCancel: {
+                        self.close()
+                    }
+                }
+
+                func close() {
+                    let waiter: CheckedContinuation<Bool, Never>? = state.withLock { s in
+                        s.closed = true
+                        let w = s.waiter
+                        s.waiter = nil
+                        return w
+                    }
+                    waiter?.resume(returning: false)
+                }
+            }
+
+            private final class LockedBox<Value: Sendable>: Sendable {
+                private let storage: Mutex<Value>
+                init(_ value: Value) { self.storage = Mutex(value) }
+                func withLock<R: Sendable>(_ body: (inout Value) -> R) -> R { storage.withLock { body(&$0) } }
+            }
+
             private struct PendingState: Sendable {
                 var nextID: Int64 = 1
                 var pending: [JSONRPCID: CheckedContinuation<JSONValue, any Error>] = [:]
+                var sendTasks: [JSONRPCID: Task<Void, Never>] = [:]
                 var onCloseCallbacks: [@Sendable (String) -> Void] = []
                 var onSessionExpiredCallbacks: [@Sendable () -> Void] = []
                 var onToolsChangedCallbacks: [@Sendable () -> Void] = []
@@ -1582,16 +2595,36 @@ public enum CoreMCP {
                 var protocolVersion: String?
                 var title: String?
                 var instructions: String?
+                var serverCapabilities: [String: JSONValue] = [:]
+                var liveEvents: LiveEvents?
+                var openStreams: [String: OpenEventStream] = [:]
+                var listenAckCallbacks: [String: @Sendable () -> Void] = [:]
+                var listChangedTasks: [Task<Void, Never>] = []
+                var listChangedSignal: CoalescingSignal?
+                var closed = false
             }
 
             public let server: String
+            private let directory: String
             private let transport: any Transport
+            private let ungrantedSilenceMs: Int64
+            private let sleep: (@Sendable (Int64) async throws -> Void)?
             private let state = Mutex(PendingState())
-            public let events: (any Events)? = nil
 
-            public init(server: String, transport: any Transport) {
+            public var events: (any Events)? { state.withLock { $0.liveEvents } }
+
+            public init(
+                server: String,
+                transport: any Transport,
+                directory: String = "/",
+                ungrantedSilenceMs: Int64 = Client.ungrantedSilenceMs,
+                sleep: (@Sendable (Int64) async throws -> Void)? = nil
+            ) {
                 self.server = server
+                self.directory = directory
                 self.transport = transport
+                self.ungrantedSilenceMs = ungrantedSilenceMs
+                self.sleep = sleep
                 transport.setHandlers(
                     onMessage: { [weak self] msg in self?.handleInbound(msg) },
                     onError: { [weak self] err in self?.failAllPending(err) },
@@ -1608,10 +2641,39 @@ public enum CoreMCP {
             public var title: String? { state.withLock { $0.title } }
             public var instructions: String? { state.withLock { $0.instructions } }
 
+            private static func idKey(_ id: JSONRPCID) -> String {
+                switch id {
+                case .int(let i): return String(i)
+                case .string(let s): return s
+                }
+            }
+
+            private func registerEventStream(id: JSONRPCID, stream: OpenEventStream) {
+                state.withLock { $0.openStreams[Self.idKey(id)] = stream }
+            }
+
+            private func unregisterEventStream(id: JSONRPCID) {
+                state.withLock { _ = $0.openStreams.removeValue(forKey: Self.idKey(id)) }
+            }
+
+            @discardableResult
+            private func unregisterEventStream(matching stream: OpenEventStream) -> JSONRPCID? {
+                state.withLock { s in
+                    for (k, v) in s.openStreams where v === stream {
+                        s.openStreams.removeValue(forKey: k)
+                        if let i = Int64(k) { return .int(i) }
+                        return .string(k)
+                    }
+                    return nil
+                }
+            }
+
             public func performHandshake(
                 clientInfo: (name: String, version: String),
                 negotiation: VersionNegotiation = .legacy,
-                timeoutMs: Int? = nil
+                timeoutMs: Int? = nil,
+                roots: Bool = true,
+                events: Bool = false
             ) async throws {
                 let effectiveTimeoutMs: Int?
                 switch negotiation {
@@ -1633,9 +2695,16 @@ public enum CoreMCP {
 
                 let runHandshake: @Sendable () async throws -> Void = { [self] in
                     try await self.transport.start()
+                    var clientCaps: [String: JSONValue] = [:]
+                    if roots {
+                        clientCaps["roots"] = .object([:])
+                    }
+                    if events {
+                        clientCaps["extensions"] = .object([Client.eventsExtensionKey: .object([:])])
+                    }
                     let initParams: JSONValue = .object([
                         "protocolVersion": .string(requestedVersion),
-                        "capabilities": .object([:]),
+                        "capabilities": .object(clientCaps),
                         "clientInfo": .object([
                             "name": .string(clientInfo.name),
                             "version": .string(clientInfo.version),
@@ -1643,6 +2712,7 @@ public enum CoreMCP {
                     ])
                     let result = try await self.sendRequest(method: "initialize", params: initParams)
                     var negotiatedVersion: String?
+                    var serverCaps: [String: JSONValue] = [:]
                     if case .object(let obj) = result {
                         self.state.withLock { s in
                             if case .string(let ver) = obj["protocolVersion"] {
@@ -1653,6 +2723,10 @@ public enum CoreMCP {
                             if case .object(let info) = obj["serverInfo"] {
                                 if case .string(let t) = info["title"] { s.title = t }
                                 else if case .string(let n) = info["name"] { s.title = n }
+                            }
+                            if case .object(let caps) = obj["capabilities"] {
+                                s.serverCapabilities = caps
+                                serverCaps = caps
                             }
                         }
                     }
@@ -1666,6 +2740,23 @@ public enum CoreMCP {
                         )
                     }
                     try await self.sendNotification(method: "notifications/initialized", params: nil)
+
+                    // MCP Events are defined for 2026-07-28 only.
+                    if events, self.modern,
+                       case .object(let exts) = serverCaps["extensions"],
+                       let eventExt = exts[Client.eventsExtensionKey]
+                    {
+                        let live = LiveEvents(
+                            connection: self,
+                            server: self.server,
+                            ungrantedSilenceMs: self.ungrantedSilenceMs,
+                            sleep: self.sleep
+                        )
+                        self.state.withLock { $0.liveEvents = live }
+                        if case .object(let settings) = eventExt, settings["listChanged"] == .bool(true) {
+                            self.startEventListChangedListener(events: live)
+                        }
+                    }
                 }
 
                 guard let ms = effectiveTimeoutMs else {
@@ -1691,29 +2782,197 @@ public enum CoreMCP {
                 }
             }
 
-            public func sendRequest(method: String, params: JSONValue?) async throws -> JSONValue {
+            private func startEventListChangedListener(events live: LiveEvents) {
+                let signal = CoalescingSignal()
+                let worker = Task<Void, Never> {
+                    while await signal.take() {
+                        if Task.isCancelled { break }
+                        _ = try? await live.list()
+                    }
+                }
+                let listener = Task<Void, Never> { [weak self] in
+                    let attemptBox = LockedBox(0)
+                    while !Task.isCancelled {
+                        guard let self else { break }
+                        if self.state.withLock({ $0.closed }) { break }
+                        let activeListenID = LockedBox<JSONRPCID?>(nil)
+                        do {
+                            let listenParams: JSONValue = .object([
+                                "notifications": .object(["eventsListChanged": .bool(true)]),
+                            ])
+                            _ = try await self.sendRequest(
+                                method: "subscriptions/listen",
+                                params: listenParams,
+                                onRequestID: { [weak self] reqID in
+                                    activeListenID.withLock { $0 = reqID }
+                                    let key = Self.idKey(reqID)
+                                    self?.state.withLock { s in
+                                        s.listenAckCallbacks[key] = {
+                                            attemptBox.withLock { $0 = 0 }
+                                            signal.offer()
+                                        }
+                                    }
+                                }
+                            )
+                            if let id = activeListenID.withLock({ $0 }) {
+                                _ = self.state.withLock { $0.listenAckCallbacks.removeValue(forKey: Self.idKey(id)) }
+                            }
+                            // Server closed the listen stream cleanly -> treat as dropped and reopen.
+                            if Task.isCancelled || self.state.withLock({ $0.closed }) { break }
+                            let currentAttempt = attemptBox.withLock { v -> Int in
+                                let cur = v
+                                v += 1
+                                return cur
+                            }
+                            let delayMs = EventErrors.reopen.delayMs(attempt: currentAttempt)
+                            if let customSleep = self.sleep {
+                                try await customSleep(delayMs)
+                            } else {
+                                try await Task.sleep(for: .milliseconds(max(0, delayMs)))
+                            }
+                        } catch is CancellationError {
+                            if let id = activeListenID.withLock({ $0 }) {
+                                _ = self.state.withLock { $0.listenAckCallbacks.removeValue(forKey: Self.idKey(id)) }
+                                let idVal: JSONValue = switch id {
+                                case .int(let i): .int(i)
+                                case .string(let s): .string(s)
+                                }
+                                Task { [weak self] in
+                                    try? await self?.sendNotification(
+                                        method: "notifications/cancelled",
+                                        params: .object(["requestId": idVal])
+                                    )
+                                }
+                            }
+                            break
+                        } catch is JSONRPCErrorObject {
+                            if let id = activeListenID.withLock({ $0 }) {
+                                _ = self.state.withLock { $0.listenAckCallbacks.removeValue(forKey: Self.idKey(id)) }
+                            }
+                            // A protocol refusal is not retried.
+                            break
+                        } catch {
+                            if let id = activeListenID.withLock({ $0 }) {
+                                _ = self.state.withLock { $0.listenAckCallbacks.removeValue(forKey: Self.idKey(id)) }
+                            }
+                            if Task.isCancelled || self.state.withLock({ $0.closed }) { break }
+                            let currentAttempt = attemptBox.withLock { v -> Int in
+                                let cur = v
+                                v += 1
+                                return cur
+                            }
+                            let delayMs = EventErrors.reopen.delayMs(attempt: currentAttempt)
+                            do {
+                                if let customSleep = self.sleep {
+                                    try await customSleep(delayMs)
+                                } else {
+                                    try await Task.sleep(for: .milliseconds(max(0, delayMs)))
+                                }
+                            } catch {
+                                break
+                            }
+                        }
+                    }
+                }
+                state.withLock { s in
+                    s.listChangedSignal = signal
+                    s.listChangedTasks = [worker, listener]
+                }
+            }
+
+            public func sendRequest(
+                method: String,
+                params: JSONValue?,
+                headers: [String: String] = [:],
+                onRequestID: (@Sendable (JSONRPCID) -> Void)? = nil
+            ) async throws -> JSONValue {
                 let id: JSONRPCID = state.withLock { s in
                     let cur = s.nextID
                     s.nextID += 1
                     return .int(cur)
                 }
+                onRequestID?(id)
                 let req = JSONRPCMessage.request(JSONRPCRequest(id: id, method: method, params: params))
-                return try await withCheckedThrowingContinuation { continuation in
-                    state.withLock { $0.pending[id] = continuation }
-                    Task { [self] in
-                        do {
-                            try await self.transport.send(req)
-                        } catch {
-                            let cont = self.state.withLock { $0.pending.removeValue(forKey: id) }
-                            cont?.resume(throwing: error)
+                return try await withTaskCancellationHandler {
+                    try await withCheckedThrowingContinuation { continuation in
+                        let task = Task { [self] in
+                            do {
+                                if headers.isEmpty {
+                                    try await self.transport.send(req)
+                                } else {
+                                    try await self.transport.send(req, headers: headers)
+                                }
+                                _ = self.state.withLock { $0.sendTasks.removeValue(forKey: id) }
+                            } catch {
+                                let cont = self.state.withLock { s -> CheckedContinuation<JSONValue, any Error>? in
+                                    s.sendTasks.removeValue(forKey: id)
+                                    return s.pending.removeValue(forKey: id)
+                                }
+                                cont?.resume(throwing: error)
+                            }
+                        }
+                        let alreadyCancelled = state.withLock { s -> Bool in
+                            if Task.isCancelled { return true }
+                            s.pending[id] = continuation
+                            s.sendTasks[id] = task
+                            return false
+                        }
+                        if alreadyCancelled {
+                            task.cancel()
+                            continuation.resume(throwing: CancellationError())
                         }
                     }
+                } onCancel: {
+                    let (sendTask, cont) = self.state.withLock { s -> (Task<Void, Never>?, CheckedContinuation<JSONValue, any Error>?) in
+                        (s.sendTasks.removeValue(forKey: id), s.pending.removeValue(forKey: id))
+                    }
+                    sendTask?.cancel()
+                    cont?.resume(throwing: CancellationError())
                 }
             }
 
             public func sendNotification(method: String, params: JSONValue?) async throws {
                 let note = JSONRPCMessage.notification(JSONRPCNotification(method: method, params: params))
                 try await transport.send(note)
+            }
+
+            private static func subscriptionID(from params: [String: JSONValue]) -> String? {
+                guard case .object(let meta) = params["_meta"],
+                      let raw = meta[Client.subscriptionIDMetaKey]
+                else {
+                    return nil
+                }
+                switch raw {
+                case .string(let s): return s
+                case .int(let i): return String(i)
+                default: return nil
+                }
+            }
+
+            private static func parseOptionalCursor(from params: [String: JSONValue]) -> (ok: Bool, value: String?) {
+                guard let raw = params["cursor"] else { return (true, nil) }
+                switch raw {
+                case .null: return (true, nil)
+                case .string(let s): return (true, s)
+                default: return (false, nil)
+                }
+            }
+
+            private static func parseEventError(from params: [String: JSONValue]) -> EventError? {
+                guard case .object(let errObj) = params["error"],
+                      case .int(let code) = errObj["code"],
+                      case .string(let message) = errObj["message"]
+                else {
+                    return nil
+                }
+                let dataVal: JSONValue?
+                if let rawData = errObj["data"] {
+                    guard case .object = rawData else { return nil }
+                    dataVal = rawData
+                } else {
+                    dataVal = nil
+                }
+                return EventError(code: Int(code), message: message, data: dataVal)
             }
 
             private func handleInbound(_ message: JSONRPCMessage) {
@@ -1727,37 +2986,124 @@ public enum CoreMCP {
                         cont.resume(returning: resp.result ?? .null)
                     }
                 case .notification(let note):
-                    let callbacks: [@Sendable () -> Void]
                     switch note.method {
                     case "notifications/tools/list_changed":
-                        callbacks = state.withLock { $0.onToolsChangedCallbacks }
+                        let callbacks = state.withLock { $0.onToolsChangedCallbacks }
+                        for cb in callbacks { cb() }
                     case "notifications/prompts/list_changed":
-                        callbacks = state.withLock { $0.onPromptsChangedCallbacks }
+                        let callbacks = state.withLock { $0.onPromptsChangedCallbacks }
+                        for cb in callbacks { cb() }
                     case "notifications/resources/list_changed":
-                        callbacks = state.withLock { $0.onResourcesChangedCallbacks }
+                        let callbacks = state.withLock { $0.onResourcesChangedCallbacks }
+                        for cb in callbacks { cb() }
+                    case "notifications/events/list_changed":
+                        state.withLock { $0.listChangedSignal }?.offer()
+                    case "notifications/subscriptions/acknowledged":
+                        if case .object(let obj) = note.params, let subID = Self.subscriptionID(from: obj) {
+                            let callback = state.withLock { $0.listenAckCallbacks.removeValue(forKey: subID) }
+                            callback?()
+                        }
+                    case "notifications/events/active":
+                        guard case .object(let obj) = note.params,
+                              let subID = Self.subscriptionID(from: obj),
+                              case .int(let hbRaw) = obj["heartbeatMs"],
+                              hbRaw > 0
+                        else { return }
+                        let cur = Self.parseOptionalCursor(from: obj)
+                        guard cur.ok else { return }
+                        let truncated: Bool
+                        if let t = obj["truncated"] {
+                            guard case .bool(let b) = t else { return }
+                            truncated = b
+                        } else {
+                            truncated = false
+                        }
+                        if let open = state.withLock({ $0.openStreams[subID] }) {
+                            open.deliver(.active(cursor: cur.value, truncated: truncated), grantedHeartbeatMs: Int(hbRaw))
+                        }
+                    case "notifications/events/event":
+                        guard case .object(let obj) = note.params,
+                              let subID = Self.subscriptionID(from: obj),
+                              case .string(let eventId) = obj["eventId"],
+                              case .string(let name) = obj["name"],
+                              case .string(let timestamp) = obj["timestamp"],
+                              Client.isValidISO8601Timestamp(timestamp),
+                              case .object(let dataObj) = obj["data"]
+                        else { return }
+                        let cur = Self.parseOptionalCursor(from: obj)
+                        guard cur.ok else { return }
+                        if let open = state.withLock({ $0.openStreams[subID] }) {
+                            open.deliver(.event(eventId: eventId, name: name, timestamp: timestamp, data: dataObj, cursor: cur.value))
+                        }
+                    case "notifications/events/heartbeat":
+                        guard case .object(let obj) = note.params,
+                              let subID = Self.subscriptionID(from: obj)
+                        else { return }
+                        let cur = Self.parseOptionalCursor(from: obj)
+                        guard cur.ok else { return }
+                        if let open = state.withLock({ $0.openStreams[subID] }) {
+                            open.deliver(.heartbeat(cursor: cur.value))
+                        }
+                    case "notifications/events/error":
+                        guard case .object(let obj) = note.params,
+                              let subID = Self.subscriptionID(from: obj),
+                              let err = Self.parseEventError(from: obj)
+                        else { return }
+                        if let open = state.withLock({ $0.openStreams[subID] }) {
+                            open.deliver(.error(err))
+                        }
+                    case "notifications/events/terminated":
+                        guard case .object(let obj) = note.params,
+                              let subID = Self.subscriptionID(from: obj),
+                              let err = Self.parseEventError(from: obj)
+                        else { return }
+                        if let open = state.withLock({ $0.openStreams.removeValue(forKey: subID) }) {
+                            open.fail(EventStreamTerminatedError(server: server, code: err.code, message: err.message, data: err.data))
+                        }
                     default:
-                        callbacks = []
+                        break
                     }
-                    for cb in callbacks { cb() }
                 case .request(let req):
                     if req.method == "ping" {
                         Task { [self] in
                             try? await self.transport.send(.response(JSONRPCResponse(id: req.id, result: .object([:]))))
+                        }
+                    } else if req.method == "roots/list" {
+                        let rootURI = URL(fileURLWithPath: directory).absoluteString
+                        Task { [self] in
+                            try? await self.transport.send(.response(JSONRPCResponse(
+                                id: req.id,
+                                result: .object(["roots": .array([.object(["uri": .string(rootURI)])])])
+                            )))
                         }
                     }
                 }
             }
 
             private func failAllPending(_ error: any Error) {
-                let waiters = state.withLock { s -> [CheckedContinuation<JSONValue, any Error>] in
+                let (waiters, streams) = state.withLock { s -> ([CheckedContinuation<JSONValue, any Error>], [OpenEventStream]) in
                     let all = Array(s.pending.values)
                     s.pending.removeAll()
-                    return all
+                    let open = Array(s.openStreams.values)
+                    s.openStreams.removeAll()
+                    return (all, open)
                 }
                 for w in waiters { w.resume(throwing: error) }
+                for st in streams { st.fail(error) }
             }
 
             private func handleClose(reason: String) {
+                let (tasks, signal) = state.withLock { s -> ([Task<Void, Never>], CoalescingSignal?) in
+                    s.closed = true
+                    s.listenAckCallbacks.removeAll()
+                    let ts = s.listChangedTasks
+                    s.listChangedTasks.removeAll()
+                    let sig = s.listChangedSignal
+                    s.listChangedSignal = nil
+                    return (ts, sig)
+                }
+                signal?.close()
+                for t in tasks { t.cancel() }
                 failAllPending(PlatformError.ioFailure("MCP connection closed: \(reason)"))
                 let cbs = state.withLock { $0.onCloseCallbacks }
                 for cb in cbs { cb(reason) }
@@ -1861,20 +3207,31 @@ public enum CoreMCP {
             }
 
             public func close() async throws {
+                let (tasks, signal) = state.withLock { s -> ([Task<Void, Never>], CoalescingSignal?) in
+                    s.closed = true
+                    s.listenAckCallbacks.removeAll()
+                    let ts = s.listChangedTasks
+                    s.listChangedTasks.removeAll()
+                    let sig = s.listChangedSignal
+                    s.listChangedSignal = nil
+                    return (ts, sig)
+                }
+                signal?.close()
+                for t in tasks { t.cancel() }
                 try await transport.close()
             }
         }
 
-        // parity: core/src/mcp/client.ts#connect [status=implemented hash=742b9e59ac48]
+        // parity: core/src/mcp/client.ts#connect [status=implemented hash=b18ae90846af]
         public static func connect(_ options: ConnectOptions) async throws -> LiveConnection {
             let resolvedProtocol: McpSchema.WireProtocol
             let startupMs: Int
             switch options.config {
             case .local(let local):
-                resolvedProtocol = local.wireProtocol ?? .auto
+                resolvedProtocol = options.attachedProtocol ?? (options.transportOverride != nil ? .legacy : (local.wireProtocol ?? .auto))
                 startupMs = local.timeout?.startup?.rawValue ?? defaultStartupTimeoutMs
             case .remote(let remote):
-                resolvedProtocol = remote.wireProtocol ?? .auto
+                resolvedProtocol = options.attachedProtocol ?? (options.transportOverride != nil ? .legacy : (remote.wireProtocol ?? .auto))
                 startupMs = remote.timeout?.startup?.rawValue ?? defaultStartupTimeoutMs
             }
 
@@ -1896,12 +3253,20 @@ public enum CoreMCP {
 
             let initializeTransport: @Sendable (any Transport, McpSchema.WireProtocol, Int) async throws -> LiveConnection = {
                 transport, proto, timeoutBudgetMs in
-                let conn = LiveConnection(server: options.server, transport: transport)
+                let conn = LiveConnection(
+                    server: options.server,
+                    transport: transport,
+                    directory: options.directory,
+                    ungrantedSilenceMs: options.ungrantedSilenceMs,
+                    sleep: options.sleep
+                )
                 do {
                     try await conn.performHandshake(
                         clientInfo: options.clientInfo,
                         negotiation: negotiation(protocol: proto, startupMs: startupMs, probeTimeoutMs: options.probeTimeoutMs),
-                        timeoutMs: timeoutBudgetMs
+                        timeoutMs: timeoutBudgetMs,
+                        roots: options.roots,
+                        events: options.events
                     )
                     return conn
                 } catch {
@@ -2072,14 +3437,13 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/connection.ts#Input [status=implemented hash=151947e3a646]
+        // parity: core/src/mcp/connection.ts#Input [status=implemented hash=3fe65cd563fd]
         public struct Input: Sendable {
             public let name: String
             public let config: McpSchema.ServerConfig
             public let directory: String
             public let shared: Bool
             public let clientInfo: (name: String, version: String)
-            public let mcpEvents: Bool
             public let elicitation: Client.ElicitationHandler
             public let http: (any HTTPTransport)?
             public let spawner: (any ProcessSpawner)?
@@ -2092,7 +3456,6 @@ public enum CoreMCP {
                 directory: String = "/",
                 shared: Bool = false,
                 clientInfo: (name: String, version: String) = ("opencode", "1.0.0"),
-                mcpEvents: Bool = false,
                 elicitation: Client.ElicitationHandler = Client.ElicitationHandler(),
                 http: (any HTTPTransport)? = nil,
                 spawner: (any ProcessSpawner)? = nil,
@@ -2104,7 +3467,6 @@ public enum CoreMCP {
                 self.directory = directory
                 self.shared = shared
                 self.clientInfo = clientInfo
-                self.mcpEvents = mcpEvents
                 self.elicitation = elicitation
                 self.http = http
                 self.spawner = spawner
@@ -2169,7 +3531,7 @@ public enum CoreMCP {
                         directory: input.directory,
                         clientInfo: input.clientInfo,
                         roots: !input.shared,
-                        events: input.mcpEvents,
+                        events: true,
                         elicitation: input.elicitation,
                         transportOverride: input.transportOverride,
                         http: input.http,
@@ -2218,7 +3580,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/connection.ts#make [status=implemented hash=47dd63413523]
+        // parity: core/src/mcp/connection.ts#make [status=implemented hash=119bc9afae21]
         public static func make(_ input: Input) -> ManagedConnection {
             ManagedConnection(input: input)
         }
@@ -2260,14 +3622,22 @@ public enum CoreMCP {
             return .string(CoreKV.SharedCache.fingerprint(sorted))
         }
 
+        private static func timeoutValue(_ timeout: McpSchema.TimeoutConfig?) -> JSONValue {
+            guard let timeout else { return .null }
+            var obj: [String: JSONValue] = [:]
+            if let s = timeout.startup { obj["startup"] = .int(Int64(s.rawValue)) }
+            if let c = timeout.catalog { obj["catalog"] = .int(Int64(c.rawValue)) }
+            if let e = timeout.execution { obj["execution"] = .int(Int64(e.rawValue)) }
+            return .object(obj)
+        }
+
         /// Deterministic pool key encoding every connection-affecting option while fingerprinting secrets.
-        // parity: core/src/mcp/pool.ts#key [status=implemented hash=62f4c7715b0c]
+        // parity: core/src/mcp/pool.ts#key [status=implemented hash=800f255fee48]
         public static func key(
             config: McpSchema.ServerConfig,
             cwd: String? = nil,
             credential: String? = nil,
-            clientInfo: (name: String, version: String)? = nil,
-            mcpEvents: Bool = false
+            clientInfo: (name: String, version: String)? = nil
         ) -> String {
             let clientVal: JSONValue = clientInfo.map {
                 .object(["name": .string($0.name), "version": .string($0.version)])
@@ -2297,8 +3667,8 @@ public enum CoreMCP {
                     .bool(remote.codemode != false),
                     credential.map(JSONValue.string) ?? .null,
                     protoVal,
+                    timeoutValue(remote.timeout),
                     clientVal,
-                    .bool(mcpEvents),
                 ]))
             case .local(let local):
                 let protoVal: JSONValue = local.wireProtocol.map { .string($0.rawValue) } ?? .null
@@ -2309,8 +3679,8 @@ public enum CoreMCP {
                     cwd.map(JSONValue.string) ?? .null,
                     secretFingerprint(local.environment),
                     protoVal,
+                    timeoutValue(local.timeout),
                     clientVal,
-                    .bool(mcpEvents),
                 ]))
             }
         }
@@ -2331,9 +3701,9 @@ public enum CoreMCP {
             }
         }
 
-        /// Pooled stdio servers run on the local host environment; this port spawns them through `Connection.make`,
-        /// so upstream's `Environment.make(localID, …)` construction has no separate host value here.
-        // parity: core/src/mcp/pool.ts#layer [status=implemented hash=d979691bcc4f]
+        /// Pooled stdio servers run on the local host environment; this port spawns them through `Connection.make`
+        /// (upstream uses `Environment.local(...)` and always enables MCP Events without a separate flag).
+        // parity: core/src/mcp/pool.ts#layer [status=implemented hash=f9fd823a980f]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer.succeed(
             key: Service.serviceKey,
             value: Service()
@@ -2552,6 +3922,186 @@ public enum CoreMCP {
             }
         }
 
+        // parity: core/src/mcp/index.ts#EventPosition [status=implemented hash=430a0d5ab694]
+        public struct EventPosition: Equatable, Hashable, Sendable, Codable {
+            public let cursor: String?
+            public let seen: [String]
+
+            public init(cursor: String? = nil, seen: [String] = []) {
+                self.cursor = cursor
+                self.seen = seen
+            }
+        }
+
+        // parity: core/src/mcp/index.ts#EventUpdate [status=implemented hash=e9635e731ef9]
+        public enum EventUpdate: Equatable, Hashable, Sendable {
+            public struct EventPayload: Equatable, Hashable, Sendable {
+                public let eventId: String
+                public let name: String
+                public let timestamp: String
+                public let data: [String: JSONValue]
+                public let cursor: String?
+
+                public init(
+                    eventId: String,
+                    name: String,
+                    timestamp: String,
+                    data: [String: JSONValue],
+                    cursor: String? = nil
+                ) {
+                    self.eventId = eventId
+                    self.name = name
+                    self.timestamp = timestamp
+                    self.data = data
+                    self.cursor = cursor
+                }
+            }
+
+            case event(event: EventPayload, position: EventPosition, truncated: Bool)
+            case position(EventPosition)
+            case pending
+        }
+
+        public static let seenEventsLimit = 100
+        public static let maxCursorLength = 4096
+
+        private static func isEndedEventError(_ error: any Swift.Error) -> Bool {
+            (error is Client.EventStreamRejectedError)
+                || (error is Client.EventStreamTerminatedError)
+                || (error is EventsUnavailableError)
+        }
+
+        /// Follows an event type through the server's events `open` gives, reopening dropped streams with jittered
+        /// backoff, tracking the latest cursor and up to 100 seen event IDs for replay deduplication, and failing
+        /// immediately on terminal errors (`EventStreamRejectedError`, `EventStreamTerminatedError`, `EventsUnavailableError`).
+        // parity: core/src/mcp/index.ts#followEvents [status=implemented hash=8c1018727a11]
+        public static func followEvents(
+            server: ServerName,
+            name: String,
+            arguments: [String: JSONValue]? = nil,
+            position initialPosition: EventPosition? = nil,
+            reopenSchedule: EventErrors.ReopenSchedule = EventErrors.reopen,
+            sleep: @escaping @Sendable (Int64) async throws -> Void = { ms in
+                try await Task.sleep(for: .milliseconds(max(0, ms)))
+            },
+            open: @escaping @Sendable () async throws -> any Client.Events
+        ) -> AsyncThrowingStream<EventUpdate, Swift.Error> {
+            AsyncThrowingStream { continuation in
+                let task = Task<Void, Never> {
+                    var position = initialPosition ?? EventPosition(cursor: nil, seen: [])
+                    var gap = false
+                    var attempt = 0
+
+                    func move(_ next: EventPosition) {
+                        let moved = next.cursor != position.cursor
+                        position = next
+                        if moved {
+                            continuation.yield(.position(position))
+                        }
+                    }
+
+                    while !Task.isCancelled {
+                        do {
+                            let events = try await open()
+                            let stream = try await events.stream(
+                                name: name,
+                                arguments: arguments,
+                                cursor: position.cursor,
+                                maxAgeMs: nil
+                            )
+                            for try await message in stream {
+                                if Task.isCancelled {
+                                    continuation.finish()
+                                    return
+                                }
+                                switch message {
+                                case .error:
+                                    continue
+                                case .heartbeat(let cur):
+                                    if (cur?.utf16.count ?? 0) > maxCursorLength {
+                                        throw EventsUnavailableError(
+                                            server: server,
+                                            message: "The MCP server sent an oversized event cursor."
+                                        )
+                                    }
+                                    move(EventPosition(cursor: cur, seen: position.seen))
+                                case .active(let cur, let truncated):
+                                    if (cur?.utf16.count ?? 0) > maxCursorLength {
+                                        throw EventsUnavailableError(
+                                            server: server,
+                                            message: "The MCP server sent an oversized event cursor."
+                                        )
+                                    }
+                                    // Only a confirmed open resets the retry delay, never a failed attempt.
+                                    attempt = 0
+                                    gap = gap || (cur != nil && truncated)
+                                    position = EventPosition(cursor: cur, seen: position.seen)
+                                    continuation.yield(.position(position))
+                                case .event(let eventId, let evName, let timestamp, let data, let cur):
+                                    if (cur?.utf16.count ?? 0) > maxCursorLength {
+                                        throw EventsUnavailableError(
+                                            server: server,
+                                            message: "The MCP server sent an oversized event cursor."
+                                        )
+                                    }
+                                    if position.seen.contains(eventId) {
+                                        move(EventPosition(cursor: cur, seen: position.seen))
+                                        continue
+                                    }
+                                    var nextSeen = position.seen
+                                    nextSeen.append(eventId)
+                                    if nextSeen.count > seenEventsLimit {
+                                        nextSeen = Array(nextSeen.suffix(seenEventsLimit))
+                                    }
+                                    position = EventPosition(cursor: cur, seen: nextSeen)
+                                    let payload = EventUpdate.EventPayload(
+                                        eventId: eventId,
+                                        name: evName,
+                                        timestamp: timestamp,
+                                        data: data,
+                                        cursor: cur
+                                    )
+                                    continuation.yield(.event(event: payload, position: position, truncated: gap))
+                                    gap = false
+                                }
+                            }
+                            if Task.isCancelled {
+                                continuation.finish()
+                                return
+                            }
+                            // A clean close reopens like a broken stream.
+                            throw PlatformError.ioFailure("MCP server \(server.rawValue) closed the event stream")
+                        } catch is CancellationError {
+                            continuation.finish()
+                            return
+                        } catch {
+                            if Task.isCancelled {
+                                continuation.finish()
+                                return
+                            }
+                            if isEndedEventError(error) {
+                                continuation.finish(throwing: error)
+                                return
+                            }
+                            continuation.yield(.pending)
+                            let delayMs = reopenSchedule.delayMs(attempt: attempt)
+                            attempt += 1
+                            do {
+                                try await sleep(delayMs)
+                            } catch {
+                                continuation.finish()
+                                return
+                            }
+                        }
+                    }
+                    continuation.finish()
+                }
+                continuation.onTermination = { _ in
+                    task.cancel()
+                }
+            }
+        }
+
         // parity: core/src/mcp/index.ts#Options [status=implemented hash=70797ffe8861]
         public struct Options: Equatable, Hashable, Sendable, Codable {
             public let clientName: String?
@@ -2599,7 +4149,7 @@ public enum CoreMCP {
             }
         }
 
-        // parity: core/src/mcp/index.ts#Interface [status=implemented hash=1dbe987019ab]
+        // parity: core/src/mcp/index.ts#Interface [status=implemented hash=adeabd976795]
         public protocol Interface: CoreState.Transformable where Editor == Registry.Editor {
             func servers() async -> [ServerInfo]
             func add(server: String, config: McpSchema.ServerConfig) async
@@ -2617,6 +4167,12 @@ public enum CoreMCP {
             func resources(server: String) async throws -> ResourceCatalog
             func readResource(server: String, uri: String) async throws -> ResourceContent?
             func events(server: String) async throws -> (any Client.Events)?
+            func follow(
+                server: String,
+                name: String,
+                arguments: [String: JSONValue]?,
+                position: EventPosition?
+            ) async throws -> AsyncThrowingStream<EventUpdate, Swift.Error>
             func subscribe(server: String, name: String, arguments: [String: JSONValue]?, cursor: String?) async throws -> Subscription
             func unsubscribe(id: String) async
             func subscriptions() async -> [Subscription]
@@ -2632,11 +4188,38 @@ public enum CoreMCP {
                 var connection: Connection.ManagedConnection
             }
 
+            private struct FollowedSubscription: Sendable {
+                let id: String
+                let server: ServerName
+                let name: String
+                let arguments: [String: JSONValue]?
+                var status: McpSchema.SubscriptionStatus
+                var position: EventPosition
+
+                func view() -> Subscription {
+                    Subscription(
+                        id: id,
+                        server: server,
+                        name: name,
+                        arguments: arguments,
+                        status: status,
+                        cursor: position.cursor
+                    )
+                }
+
+                var isEnded: Bool {
+                    switch status {
+                    case .pending, .active: return false
+                    case .unavailable, .terminated, .rejected: return true
+                    }
+                }
+            }
+
             private struct RuntimeState: Sendable {
                 var entries: [ServerName: RuntimeEntry] = [:]
                 var attached: [ServerName: [Client.LiveConnection]] = [:]
                 var customEvents: [ServerName: any Client.Events] = [:]
-                var subs: [String: Subscription] = [:]
+                var followed: [String: FollowedSubscription] = [:]
                 var subTasks: [String: Task<Void, Never>] = [:]
             }
 
@@ -2645,6 +4228,8 @@ public enum CoreMCP {
             private let http: (any HTTPTransport)?
             private let spawner: (any ProcessSpawner)?
             private let bus: CoreBus.Service?
+            private let reopenSchedule: EventErrors.ReopenSchedule
+            private let reopenSleep: @Sendable (Int64) async throws -> Void
             private let state: CoreState.Store<Data, Editor>
             private let runtime = Mutex(RuntimeState())
 
@@ -2653,13 +4238,19 @@ public enum CoreMCP {
                 directory: String = "/",
                 http: (any HTTPTransport)? = nil,
                 spawner: (any ProcessSpawner)? = nil,
-                bus: CoreBus.Service? = nil
+                bus: CoreBus.Service? = nil,
+                reopenSchedule: EventErrors.ReopenSchedule = EventErrors.reopen,
+                reopenSleep: @escaping @Sendable (Int64) async throws -> Void = { ms in
+                    try await Task.sleep(for: .milliseconds(max(0, ms)))
+                }
             ) {
                 self.options = options
                 self.directory = directory
                 self.http = http
                 self.spawner = spawner
                 self.bus = bus
+                self.reopenSchedule = reopenSchedule
+                self.reopenSleep = reopenSleep
                 self.state = CoreState.create(CoreState.Options(
                     name: "mcp",
                     initial: { Data() },
@@ -2909,6 +4500,74 @@ public enum CoreMCP {
                 }
             }
 
+            private func serverExists(_ key: ServerName) -> Bool {
+                runtime.withLock { r in
+                    r.customEvents[key] != nil || r.entries[key] != nil || (r.attached[key]?.isEmpty == false)
+                }
+            }
+
+            public func follow(
+                server: String,
+                name: String,
+                arguments: [String: JSONValue]? = nil,
+                position: EventPosition? = nil
+            ) async throws -> AsyncThrowingStream<EventUpdate, Swift.Error> {
+                let key = ServerName(rawValue: server)
+                guard serverExists(key) else {
+                    throw NotFoundError(server: key)
+                }
+                return Registry.followEvents(
+                    server: key,
+                    name: name,
+                    arguments: arguments,
+                    position: position,
+                    reopenSchedule: reopenSchedule,
+                    sleep: reopenSleep
+                ) { [weak self] in
+                    guard let self else {
+                        throw EventsUnavailableError(server: key, message: "The MCP server was removed or disabled.")
+                    }
+                    return try self.runtime.withLock { r -> any Client.Events in
+                        if let custom = r.customEvents[key] {
+                            return custom
+                        }
+                        if let attachedConn = r.attached[key]?.last {
+                            guard let ev = attachedConn.events else {
+                                throw EventsUnavailableError(server: key, message: "The MCP server offers no events.")
+                            }
+                            return ev
+                        }
+                        guard let entry = r.entries[key], entry.status != .disabled else {
+                            throw EventsUnavailableError(server: key, message: "The MCP server was removed or disabled.")
+                        }
+                        guard entry.status == .connected else {
+                            throw PlatformError.ioFailure("MCP server \(key.rawValue) is not connected")
+                        }
+                        guard let ev = entry.connection.client?.events else {
+                            throw EventsUnavailableError(server: key, message: "The MCP server offers no events.")
+                        }
+                        return ev
+                    }
+                }
+            }
+
+            private func setSubscriptionStatus(_ id: String, status: McpSchema.SubscriptionStatus) async {
+                let changed = runtime.withLock { r -> Bool in
+                    guard var sub = r.followed[id], sub.status != status else { return false }
+                    sub.status = status
+                    r.followed[id] = sub
+                    return true
+                }
+                if changed, let bus {
+                    let loc = OpenCodeLocation(directory: directory)
+                    await bus.emit(
+                        McpEventSchema.ExperimentalSubscriptionChanged,
+                        data: McpEventSchema.ExperimentalSubscriptionChangedData(id: id),
+                        options: CoreBus.PublishOptions(location: loc)
+                    )
+                }
+            }
+
             public func subscribe(
                 server: String,
                 name: String,
@@ -2916,121 +4575,145 @@ public enum CoreMCP {
                 cursor: String? = nil
             ) async throws -> Subscription {
                 let key = ServerName(rawValue: server)
-                let (exists, eventsProvider): (Bool, (any Client.Events)?) = runtime.withLock { r in
-                    if let custom = r.customEvents[key] { return (true, custom) }
-                    if let entry = r.entries[key] { return (true, entry.connection.client?.events) }
-                    if let attachedConn = r.attached[key]?.last { return (true, attachedConn.events) }
-                    return (false, nil)
-                }
-                guard exists else {
+                guard serverExists(key) else {
                     throw NotFoundError(server: key)
                 }
-                let subID = Hash.sha256(CoreSubsystems.Util.canonicalJson(.array([
+                let digest = Hash.sha256(CoreSubsystems.Util.canonicalJson(.array([
                     .string(server),
                     .string(name),
-                    arguments.map(JSONValue.object) ?? .null,
+                    .object(arguments ?? [:]),
                 ])))
-                let (sub, isNew): (Subscription, Bool) = runtime.withLock { r in
-                    if let existing = r.subs[subID] { return (existing, false) }
-                    let created = Subscription(id: subID, server: key, name: name, arguments: arguments, status: .pending, cursor: cursor)
-                    r.subs[subID] = created
-                    return (created, true)
+                let subID = "mcpsub_" + String(digest.prefix(24))
+                let (view, shouldStart, startPosition): (Subscription, Bool, EventPosition) = runtime.withLock { r in
+                    if let existing = r.followed[subID], !existing.isEnded {
+                        return (existing.view(), false, existing.position)
+                    }
+                    let existing = r.followed[subID]
+                    let pos = EventPosition(
+                        cursor: cursor ?? existing?.position.cursor,
+                        seen: existing?.position.seen ?? []
+                    )
+                    let created = FollowedSubscription(
+                        id: subID,
+                        server: key,
+                        name: name,
+                        arguments: arguments,
+                        status: .pending,
+                        position: pos
+                    )
+                    r.followed[subID] = created
+                    return (created.view(), true, pos)
                 }
-                if isNew, let eventsProvider, let bus {
+                if shouldStart {
                     let loc = OpenCodeLocation(directory: directory)
-                    let task = Task { [weak self] in
-                        guard let stream = try? await eventsProvider.stream(name: name, arguments: arguments, cursor: cursor) else { return }
-                        var gap = false
+                    if let bus {
+                        await bus.emit(
+                            McpEventSchema.ExperimentalSubscriptionChanged,
+                            data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID),
+                            options: CoreBus.PublishOptions(location: loc)
+                        )
+                    }
+                    let task = Task<Void, Never> { [weak self] in
+                        guard let self else { return }
                         do {
-                            for try await msg in stream {
+                            let stream = try await self.follow(
+                                server: server,
+                                name: name,
+                                arguments: arguments,
+                                position: startPosition
+                            )
+                            for try await update in stream {
                                 if Task.isCancelled { break }
-                                switch msg {
-                                case .error:
-                                    continue
-                                case .heartbeat(let cur):
-                                    self?.runtime.withLock { r in
-                                        if let s = r.subs[subID] {
-                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: s.status, cursor: cur)
-                                        }
+                                switch update {
+                                case .pending:
+                                    await self.setSubscriptionStatus(subID, status: .pending)
+                                case .position(let pos):
+                                    self.runtime.withLock { r in
+                                        r.followed[subID]?.position = pos
                                     }
-                                case .active(let cur, let truncated):
-                                    if cur != nil && truncated { gap = true }
-                                    self?.runtime.withLock { r in
-                                        if let s = r.subs[subID] {
-                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .active, cursor: cur)
-                                        }
+                                    await self.setSubscriptionStatus(subID, status: .active)
+                                case .event(let ev, let pos, let truncated):
+                                    if let bus = self.bus {
+                                        await bus.emit(
+                                            McpEventSchema.ExperimentalEvent,
+                                            data: McpEventSchema.ExperimentalEventData(
+                                                id: subID,
+                                                server: server,
+                                                name: ev.name,
+                                                eventId: ev.eventId,
+                                                timestamp: ev.timestamp,
+                                                data: .object(ev.data),
+                                                cursor: ev.cursor,
+                                                truncated: truncated ? true : nil
+                                            ),
+                                            options: CoreBus.PublishOptions(location: loc)
+                                        )
                                     }
-                                    await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
-                                case .event(let eventId, let eventName, let ts, let data, let cur):
-                                    await bus.emit(
-                                        McpEventSchema.ExperimentalEvent,
-                                        data: McpEventSchema.ExperimentalEventData(
-                                            id: subID,
-                                            server: server,
-                                            name: eventName,
-                                            eventId: eventId,
-                                            timestamp: ts,
-                                            data: data,
-                                            cursor: cur,
-                                            truncated: gap ? true : nil
-                                        ),
-                                        options: CoreBus.PublishOptions(location: loc)
-                                    )
-                                    gap = false
-                                    self?.runtime.withLock { r in
-                                        if let s = r.subs[subID] {
-                                            r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: s.status, cursor: cur)
-                                        }
+                                    self.runtime.withLock { r in
+                                        r.followed[subID]?.position = pos
                                     }
+                                    await self.setSubscriptionStatus(subID, status: .active)
                                 }
                             }
                         } catch let err as Client.EventStreamRejectedError {
-                            self?.runtime.withLock { r in
-                                if let s = r.subs[subID] {
-                                    r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .rejected(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message)), cursor: s.cursor)
-                                }
-                            }
-                            await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                            await self.setSubscriptionStatus(
+                                subID,
+                                status: .rejected(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message))
+                            )
                         } catch let err as Client.EventStreamTerminatedError {
-                            self?.runtime.withLock { r in
-                                if let s = r.subs[subID] {
-                                    r.subs[subID] = Subscription(id: s.id, server: s.server, name: s.name, arguments: s.arguments, status: .terminated(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message)), cursor: s.cursor)
-                                }
-                            }
-                            await bus.emit(McpEventSchema.ExperimentalSubscriptionChanged, data: McpEventSchema.ExperimentalSubscriptionChangedData(id: subID), options: CoreBus.PublishOptions(location: loc))
+                            await self.setSubscriptionStatus(
+                                subID,
+                                status: .terminated(error: McpSchema.SubscriptionStatus.EndError(code: Double(err.code), message: err.message))
+                            )
                         } catch {
-                            // Stream disconnected/closed
+                            await self.setSubscriptionStatus(subID, status: .unavailable)
                         }
                     }
-                    runtime.withLock { r in r.subTasks[subID] = task }
+                    let previousTask = runtime.withLock { r -> Task<Void, Never>? in
+                        let prev = r.subTasks[subID]
+                        r.subTasks[subID] = task
+                        return prev
+                    }
+                    previousTask?.cancel()
                 }
-                return sub
+                return view
             }
 
             public func unsubscribe(id: String) async {
-                let task = runtime.withLock { r -> Task<Void, Never>? in
-                    _ = r.subs.removeValue(forKey: id)
-                    return r.subTasks.removeValue(forKey: id)
+                let (removed, task) = runtime.withLock { r -> (Bool, Task<Void, Never>?) in
+                    let existed = r.followed.removeValue(forKey: id) != nil
+                    let t = r.subTasks.removeValue(forKey: id)
+                    return (existed, t)
                 }
+                guard removed else { return }
                 task?.cancel()
+                if let bus {
+                    let loc = OpenCodeLocation(directory: directory)
+                    await bus.emit(
+                        McpEventSchema.ExperimentalSubscriptionChanged,
+                        data: McpEventSchema.ExperimentalSubscriptionChangedData(id: id),
+                        options: CoreBus.PublishOptions(location: loc)
+                    )
+                }
             }
 
             public func subscriptions() async -> [Subscription] {
-                runtime.withLock { Array($0.subs.values) }
+                runtime.withLock { $0.followed.values.map { $0.view() } }
             }
         }
 
-        // parity: core/src/mcp/index.ts#layer [status=implemented hash=6374564cca12]
+        // parity: core/src/mcp/index.ts#layer [status=implemented hash=52675ddbce01]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let loc = deps.get(CoreLocation.Location.Service.serviceKey, as: CoreLocation.Location.Service.self)
                 let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self)
-                let svc = Service(options: options, directory: loc?.info.directory.rawValue ?? "/", http: http)
+                let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self)
+                let svc = Service(options: options, directory: loc?.info.directory.rawValue ?? "/", http: http, bus: bus)
                 return LayerNode.Output([Service.serviceKey: svc])
             }
         }
 
-        // parity: core/src/mcp/index.ts#configured [status=implemented hash=10e463f0cae0]
+        // parity: core/src/mcp/index.ts#configured [status=implemented hash=363622d427fe]
         public static func configured(_ options: Options = Options()) -> LayerNode.Provider {
             AppNode.makeLocationNode(Service.serviceKey, layer(options), [CoreLocation.Location.node, LayerNodePlatform.httpClient])
         }
@@ -3156,6 +4839,23 @@ public enum CoreMCP {
 
         // parity: core/src/mcp/instructions.ts#node [status=implemented hash=732a93d22de9]
         public static let node: LayerNode.Provider = AppNode.makeLocationNode(Service.serviceKey, layer, [Registry.node])
+    }
+}
+
+public extension CoreMCP.Transport {
+    func send(_ message: CoreMCP.JSONRPCMessage, headers: [String: String]) async throws {
+        _ = headers
+        try await send(message)
+    }
+}
+
+public extension CoreMCP.Client.Events {
+    func stream(
+        name: String,
+        arguments: [String: JSONValue]? = nil,
+        cursor: String? = nil
+    ) async throws -> AsyncThrowingStream<CoreMCP.Client.EventMessage, Swift.Error> {
+        try await stream(name: name, arguments: arguments, cursor: cursor, maxAgeMs: nil)
     }
 }
 

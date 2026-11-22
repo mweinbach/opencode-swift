@@ -1,6 +1,6 @@
 {
-  "upstreamCommit": "375f654e6dc62a3224ca3663fa335d8b57584797",
-  "generatedAt": "2026-11-21T19:35:52.639Z",
+  "upstreamCommit": "ee5fe34e136488a1839ac73bcca8321c51a31b75",
+  "generatedAt": "2026-11-22T15:12:37.205Z",
   "vectorCount": 1622,
   "cases": [
     {
@@ -9044,10 +9044,6 @@
           "enabled": true,
           "source": "default"
         },
-        "mcp_events": {
-          "enabled": true,
-          "source": "default"
-        },
         "media_blob": {
           "enabled": true,
           "source": "default"
@@ -9103,10 +9099,6 @@
           "source": "default"
         },
         "machines": {
-          "enabled": false,
-          "source": "default"
-        },
-        "mcp_events": {
           "enabled": false,
           "source": "default"
         },
@@ -9169,10 +9161,6 @@
           "enabled": false,
           "source": "default"
         },
-        "mcp_events": {
-          "enabled": false,
-          "source": "default"
-        },
         "media_blob": {
           "enabled": false,
           "source": "env"
@@ -9229,10 +9217,6 @@
           "source": "env"
         },
         "machines": {
-          "enabled": true,
-          "source": "env"
-        },
-        "mcp_events": {
           "enabled": true,
           "source": "env"
         },
@@ -9298,10 +9282,6 @@
           "source": "default"
         },
         "machines": {
-          "enabled": true,
-          "source": "default"
-        },
-        "mcp_events": {
           "enabled": true,
           "source": "default"
         },
@@ -9375,10 +9355,6 @@
           "enabled": true,
           "source": "config"
         },
-        "mcp_events": {
-          "enabled": true,
-          "source": "config"
-        },
         "media_blob": {
           "enabled": true,
           "source": "config"
@@ -9442,10 +9418,6 @@
           "source": "default"
         },
         "machines": {
-          "enabled": false,
-          "source": "default"
-        },
-        "mcp_events": {
           "enabled": false,
           "source": "default"
         },
@@ -10637,7 +10609,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800001SSYEOeWLKyfL07"
+      "expectedValue": "bcfe56800001775dSpXMgwZVnM"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10648,7 +10620,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "bcfe56800002K04MoFH5DB0sKT"
+      "expectedValue": "bcfe56800002nnCDrF2SHmSvzd"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10659,7 +10631,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffeJpyKkU2tRoP62L"
+      "expectedValue": "4301a97feffeAK6oEQ174RMzVk"
     },
     {
       "fn": "schema/src/identifier.ts#create",
@@ -10670,7 +10642,7 @@
       ],
       "compare": "identifier_prefix_12",
       "expectedOk": true,
-      "expectedValue": "4301a97feffdJXqWLYo7divtRy"
+      "expectedValue": "4301a97feffdj7onwvAhNfxeDo"
     },
     {
       "fn": "schema/src/identifier.ts#ascending",
@@ -10678,7 +10650,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "1ff9b869f001yQpAqQIJekC9yT"
+      "expectedValue": "203d0e323001QmF5NSSHoPvUfl"
     },
     {
       "fn": "schema/src/identifier.ts#descending",
@@ -10686,7 +10658,7 @@
       "args": [],
       "compare": "identifier_shape",
       "expectedOk": true,
-      "expectedValue": "e00647960ffdtghDpH1Twudg4W"
+      "expectedValue": "dfc2f1cdcffdas3hD8NVtmfxMc"
     },
     {
       "fn": "util/src/uuid.ts#uuid",
@@ -10694,7 +10666,7 @@
       "args": [],
       "compare": "uuid_v4",
       "expectedOk": true,
-      "expectedValue": "14817edf-b164-43f0-ba84-4bb7a6db3981"
+      "expectedValue": "d789aee4-f022-4fbc-8292-58414703ffe4"
     },
     {
       "fn": "jsonc-parser#modifyAndApply",

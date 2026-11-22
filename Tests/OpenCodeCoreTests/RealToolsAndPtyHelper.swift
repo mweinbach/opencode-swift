@@ -146,12 +146,24 @@ enum RealToolsAndPtyHelper {
             eventTypes
         }
 
+        func check(name: String, arguments: [String: JSONValue]?) async throws {
+            _ = arguments
+            guard let match = eventTypes.first(where: { $0.name == name }), match.delivery.contains("push") else {
+                throw CoreMCP.Client.EventStreamRejectedError(
+                    server: "stub",
+                    code: -32023,
+                    message: "No push event type \(name) on MCP server stub"
+                )
+            }
+        }
+
         func stream(
             name: String,
             arguments: [String: JSONValue]?,
-            cursor: String?
+            cursor: String?,
+            maxAgeMs: Int?
         ) async throws -> AsyncThrowingStream<CoreMCP.Client.EventMessage, any Error> {
-            _ = (name, arguments, cursor)
+            _ = (name, arguments, cursor, maxAgeMs)
             return AsyncThrowingStream { $0.finish() }
         }
     }
@@ -196,6 +208,22 @@ enum RealToolsAndPtyHelper {
         func events(server: String) async throws -> (any CoreMCP.Client.Events)? {
             if let provider = eventProviders[server] { return provider }
             return try await base.events(server: server)
+        }
+        func follow(
+            server: String,
+            name: String,
+            arguments: [String: JSONValue]?,
+            position: CoreMCP.Registry.EventPosition?
+        ) async throws -> AsyncThrowingStream<CoreMCP.Registry.EventUpdate, Swift.Error> {
+            if let provider = eventProviders[server] {
+                return CoreMCP.Registry.followEvents(
+                    server: CoreMCP.Registry.ServerName(rawValue: server),
+                    name: name,
+                    arguments: arguments,
+                    position: position
+                ) { provider }
+            }
+            return try await base.follow(server: server, name: name, arguments: arguments, position: position)
         }
         func subscribe(server: String, name: String, arguments: [String: JSONValue]?, cursor: String?) async throws -> CoreMCP.Registry.Subscription {
             try await base.subscribe(server: server, name: name, arguments: arguments, cursor: cursor)
