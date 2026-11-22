@@ -220,6 +220,9 @@ export const OUT_OF_SCOPE_WEB_PACKAGES: readonly string[] = [
   "effect-drizzle-sqlite",
   "identity",
   "plugins",
+  // Unshipped Rust rewrite of the CLI/TUI client (`opencode-native`, a client of the TS server). The Swift port
+  // tracks the shipping TypeScript `cli` and `tui` packages it reimplements; its own sources are Rust.
+  "cli-rs",
 ]
 
 export const EXEMPT_RUNTIME_DEPS: Readonly<Record<string, string>> = {
