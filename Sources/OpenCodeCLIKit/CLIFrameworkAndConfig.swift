@@ -1911,10 +1911,17 @@ public enum CLIConfig {
                 options: Flock.Options(dir: lockDir),
                 fileSystem: fileSystem
             )
-            defer {
-                Task { try? await lock.release() }
+            // Release before returning, as upstream's scoped lock does: a detached release would let the next locked
+            // operation take the directory while this holder's heartbeat and meta files are still being removed.
+            let result: T
+            do {
+                result = try await operation()
+            } catch {
+                try? await lock.release()
+                throw error
             }
-            return try await operation()
+            try? await lock.release()
+            return result
         }
 
         private func readInfoFromDisk() async -> Info? {
