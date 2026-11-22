@@ -1,8 +1,8 @@
 {
   "repository": "https://github.com/anomalyco/opencode.git",
   "branch": "dev",
-  "commit": "375f654e6dc62a3224ca3663fa335d8b57584797",
-  "commitDate": "2026-11-21T12:35:23-06:00",
-  "commitSubject": "fix(desktop): close the oldest Windows toast when the cap evicts it (#65421)",
+  "commit": "ee5fe34e136488a1839ac73bcca8321c51a31b75",
+  "commitDate": "2026-11-22T04:29:17-05:00",
+  "commitSubject": "feat(data): add new models section and yesterday leaderboard (#65541)",
   "license": "MIT"
 }
