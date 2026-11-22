@@ -3255,6 +3255,8 @@ public let VoiceHandler = ServerHandlerGroup(
             let wireModels = result.models.map { m in
                 VoiceModel(
                     model: m.model,
+                    name: m.name,
+                    engine: m.engine,
                     provider: m.provider,
                     transports: m.transports.compactMap(VoiceTransportType.init(rawValue:)),
                     available: m.available
@@ -3273,6 +3275,7 @@ public let VoiceHandler = ServerHandlerGroup(
         ) { ctx in
             struct VoiceSessionPayload: Decodable {
                 let model: String
+                let session: [String: JSONValue]?
                 let transport: VoiceTransportInput
             }
             struct VoiceSessionWire: Encodable {
@@ -3281,13 +3284,27 @@ public let VoiceHandler = ServerHandlerGroup(
             let payload = try ctx.decodeJSONBody(VoiceSessionPayload.self)
             let loc = try await resolveVoiceBaseLocation(ctx.runtime)
             let transportKind: String
+            let sdp: String?
+            let dcid: Int?
             switch payload.transport {
-            case .webrtc: transportKind = "webrtc"
-            case .websocket: transportKind = "websocket"
+            case .webrtc(let rtc):
+                transportKind = "webrtc"
+                sdp = rtc.sdp
+                dcid = rtc.dcid.map(Int.init)
+            case .websocket:
+                transportKind = "websocket"
+                sdp = nil
+                dcid = nil
             }
             do {
                 let transportObj = try await loc.voice.session(
-                    CoreIntegration.Voice.SessionInput(model: payload.model, transport: transportKind)
+                    CoreIntegration.Voice.SessionInput(
+                        model: payload.model,
+                        transport: transportKind,
+                        sdp: sdp,
+                        dcid: dcid,
+                        session: payload.session
+                    )
                 )
                 return ServerHTTPResponse.json(ServerDataWrapper(data: VoiceSessionWire(transport: .object(transportObj))))
             } catch let e as CoreIntegration.Voice.InvalidRequestError {

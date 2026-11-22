@@ -1172,12 +1172,12 @@ struct AIMediaAndModalitiesTests {
         }
     }
 
-    @Test("Experimental Realtime engine matching/connect and CloudflareRunExtraction p_null decoding")
+    @Test("Experimental Realtime connect and CloudflareRunExtraction p_null decoding")
     func experimentalRealtimeAndExtraction() async throws {
-        #expect(AIExperimental.Realtime.engine("gpt-realtime-2.1")?.id == "openai-realtime")
-        #expect(AIExperimental.Realtime.engine("grok-voice-3.0")?.provider == "xai")
-        #expect(AIExperimental.Realtime.engine("gemini-3.8-live")?.id == "gemini-live")
-        #expect(AIExperimental.Realtime.engine("unknown-voice") == nil)
+        #expect(AIExperimental.Realtime.engines.count == 4)
+        #expect(AIExperimental.Realtime.engines[1].id == "openai-realtime")
+        #expect(AIExperimental.Realtime.engines[2].provider == "xai")
+        #expect(AIExperimental.Realtime.engines[3].id == "gemini-live")
 
         let transport = AICoreTestHelper.MockHTTPTransport(replies: [
             // 1. xAI realtime client_secrets
@@ -1199,6 +1199,7 @@ struct AIMediaAndModalitiesTests {
 
         let ws = try await AIExperimental.Realtime.connect(
             AIExperimental.RealtimeConnectInput(
+                engine: AIExperimental.Realtime.engines[2],
                 model: "grok-voice-3.0",
                 apiKey: AIAuth.RedactedSecret("xai-key"),
                 transport: .websocket
@@ -1223,6 +1224,48 @@ struct AIMediaAndModalitiesTests {
         #expect(extracted.answers["vendor"]?["value"] == .string("Acme"))
         #expect(extracted.answers["vendor"]?["nullProbability"] == .double(0.05))
         #expect(extracted.usage?.totalTokens == 16)
+    }
+
+    @Test("AIExperimental.Realtime exposes engine APIs and rejects unsupported transports before network I/O")
+    func realtimeEnginesAndTransportValidation() async throws {
+        #expect(AIExperimental.Realtime.engines.map(\.id) == [
+            "openai-live",
+            "openai-realtime",
+            "xai-realtime",
+            "gemini-live",
+        ])
+        #expect(AIExperimental.Realtime.engines.map(\.api) == [
+            "live",
+            "realtime",
+            "realtime",
+            "bidi-generate-content",
+        ])
+
+        let transport = AICoreTestHelper.MockHTTPTransport(replies: [])
+        let executor = AIRequestExecutor.layer(transport: transport)
+
+        let badCases: [(AIExperimental.RealtimeEngine, String, AIExperimental.RealtimeTransportInput)] = [
+            (AIExperimental.Realtime.engines[0], "gpt-live-1.1", .websocket),
+            (AIExperimental.Realtime.engines[2], "grok-voice-3.0", .webrtc(sdp: "v=0")),
+            (AIExperimental.Realtime.engines[3], "gemini-3.8-live", .webrtc(sdp: "v=0")),
+        ]
+        for (engine, model, badTransport) in badCases {
+            do {
+                _ = try await AIExperimental.Realtime.connect(
+                    AIExperimental.RealtimeConnectInput(
+                        engine: engine,
+                        model: model,
+                        apiKey: AIAuth.RedactedSecret("k"),
+                        transport: badTransport
+                    ),
+                    executor: executor
+                )
+                Issue.record("Expected AIError for unsupported transport on \(model)")
+            } catch is AISchema.AIError {
+                // expected
+            }
+        }
+        #expect(transport.recordedRequests.isEmpty)
     }
 
     @Test("AIVideo.VideoDuration parses valid second strings and rejects malformed values")

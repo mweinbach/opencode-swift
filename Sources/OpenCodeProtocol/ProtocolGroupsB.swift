@@ -2130,15 +2130,26 @@ public enum VoiceTransportType: String, Equatable, Hashable, Sendable, Codable, 
     case websocket
 }
 
-// parity: protocol/src/groups/voice.ts#VoiceModel [status=implemented hash=abc9bf5a99e3]
+// parity: protocol/src/groups/voice.ts#VoiceModel [status=implemented hash=8261e74edcb9]
 public struct VoiceModel: Equatable, Hashable, Sendable, Codable {
     public let model: String
+    public let name: String
+    public let engine: String
     public let provider: String
     public let transports: [VoiceTransportType]
     public let available: Bool
 
-    public init(model: String, provider: String, transports: [VoiceTransportType], available: Bool) {
+    public init(
+        model: String,
+        name: String,
+        engine: String,
+        provider: String,
+        transports: [VoiceTransportType],
+        available: Bool
+    ) {
         self.model = model
+        self.name = name
+        self.engine = engine
         self.provider = provider
         self.transports = transports
         self.available = available

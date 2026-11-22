@@ -4432,7 +4432,7 @@ public enum PromiseWire {
     public typealias GenerateVideoError = GenerateSchema.VideoError
     // parity: client/src/promise/generated/types.ts#GenerateChoiceAnswer [status=implemented hash=f2eab5c03ddd]
     public typealias GenerateChoiceAnswer = GenerateSchema.ChoiceAnswer
-    // parity: client/src/promise/generated/types.ts#VoiceModel [status=implemented hash=9f00cd694568]
+    // parity: client/src/promise/generated/types.ts#VoiceModel [status=implemented hash=6bd8f68febbe]
     public typealias VoiceModel = OpenCodeProtocol.VoiceModel
     // parity: client/src/promise/generated/types.ts#VoiceTransport [status=implemented hash=ca7a74f9a45a]
     public typealias VoiceTransport = OpenCodeProtocol.VoiceTransport
@@ -4797,7 +4797,7 @@ public enum PromiseWire {
     public typealias SessionCreated = OpenCodeProtocol.OpenCodeEvent
     // parity: client/src/promise/generated/types.ts#SessionPermissions [status=implemented hash=dbb835113dd0]
     public typealias SessionPermissions = OpenCodeProtocol.OpenCodeEvent
-    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=428a3e8c0fe8]
+    // parity: client/src/promise/generated/types.ts#ConfigEntry [status=implemented hash=a09a047a0b20]
     public typealias ConfigEntry = ConfigSchema.Entry
     // parity: client/src/promise/generated/types.ts#AutomationAction [status=implemented hash=a3caf979f09d]
     public typealias AutomationAction = AutomationSchema.Action

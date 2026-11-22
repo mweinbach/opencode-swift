@@ -818,6 +818,23 @@ struct CLICommandsAndEntrypointTests {
         #expect(choices[1].value == "opencode-go")
         #expect(choices[1].category == .popular)
 
+        // OpenCode Go is hidden until a Go credential is saved (even if an env var is present).
+        let hiddenGoChoices = CLICommands.Auth.loginChoices([
+            IntegrationSchema.Info(
+                id: IntegrationID(rawValue: "opencode"),
+                name: "OpenCode",
+                methods: [.key(IntegrationSchema.KeyMethod(label: "API key"))],
+                connections: []
+            ),
+            IntegrationSchema.Info(
+                id: IntegrationID(rawValue: "opencode-go"),
+                name: "OpenCode Go",
+                methods: [.key(IntegrationSchema.KeyMethod(label: "API key"))],
+                connections: [.env(ConnectionSchema.EnvInfo(name: "OPENCODE_API_KEY"))]
+            ),
+        ])
+        #expect(hiddenGoChoices.map(\.value) == ["opencode"])
+
         // Form answers with conditional `when`
         let fields = try #require(FormSchema.Fields([
             .string(FormSchema.StringField(key: "region", required: true)),

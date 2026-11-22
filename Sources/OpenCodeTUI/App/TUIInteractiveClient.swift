@@ -1024,7 +1024,16 @@ public struct TUIInteractiveState: Equatable, Sendable {
 
     public var visibleProviderIntegrations: [TUIIntegrationItem] {
         integrations
-            .filter { $0.source != "mcp" }
+            .filter { item in
+                guard item.source != "mcp" else { return false }
+                if item.id == "opencode-go" {
+                    return item.connections.contains { connection in
+                        if case .credential = connection { return true }
+                        return false
+                    }
+                }
+                return true
+            }
             .sorted { lhs, rhs in
                 if lhs.priority != rhs.priority { return lhs.priority < rhs.priority }
                 let cmp = lhs.name.localizedCaseInsensitiveCompare(rhs.name)

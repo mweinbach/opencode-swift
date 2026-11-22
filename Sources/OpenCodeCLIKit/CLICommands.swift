@@ -884,9 +884,19 @@ public enum CLICommands {
             "google": 5,
         ]
 
-        // parity: cli/src/commands/handlers/auth/login.ts#loginChoices [status=implemented hash=f5d32260cb10]
+        // OpenCode Go connects through OpenCode, so it's only offered to people who already saved a Go key.
+        // parity: cli/src/commands/handlers/auth/login.ts#loginChoices [status=implemented hash=1f2ac80169e1]
         public static func loginChoices(_ integrations: [IntegrationSchema.Info]) -> [CLIUI.IntegrationChoice] {
-            let eligible = integrations.filter { !connectMethods($0).isEmpty }
+            let eligible = integrations.filter { integration in
+                guard !connectMethods(integration).isEmpty else { return false }
+                if integration.id.rawValue == "opencode-go" {
+                    return integration.connections.contains { connection in
+                        if case .credential = connection { return true }
+                        return false
+                    }
+                }
+                return true
+            }
             let sorted = eligible.sorted { a, b in
                 let aMcp = (a.metadata?["source"] == .string("mcp")) ? 1 : 0
                 let bMcp = (b.metadata?["source"] == .string("mcp")) ? 1 : 0

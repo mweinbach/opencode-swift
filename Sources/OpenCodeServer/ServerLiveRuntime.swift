@@ -805,7 +805,7 @@ public enum ServerLiveRuntime {
         ),
         BuiltinProviderSpec(
             id: .opencode,
-            name: "OpenCode Console",
+            name: "OpenCode",
             envVars: ["OPENCODE_API_KEY"],
             package: "@opencode/ai/providers/openai-compatible",
             baseURL: "https://opencode.ai/zen/v1",
@@ -1378,8 +1378,8 @@ public enum ServerLiveRuntime {
 
     // MARK: - 2a. Live & Cached ModelsDev Catalog
 
-    public static let modelsDevCatalogKVKey = "models-dev:v2:catalog"
-    public static let modelsDevMetaKVKey = "models-dev:v2:catalog:meta"
+    public static let modelsDevCatalogKVKey = "models-dev:v3:catalog"
+    public static let modelsDevMetaKVKey = "models-dev:v3:catalog:meta"
     private static let modelsDevStaleMs: Int64 = 3_600_000
 
     private static let decodedDiskCache = Mutex<[String: [CoreModel.ModelsDev.Snapshot]]>([:])
@@ -1453,6 +1453,7 @@ public enum ServerLiveRuntime {
             return CoreModel.ModelsDev.Snapshot(
                 info: snap.info,
                 models: filteredModels,
+                voices: snap.voices,
                 environment: snap.environment
             )
         }
@@ -1540,7 +1541,7 @@ public enum ServerLiveRuntime {
     }
 
     /// Fetches the live ModelsDev v2 catalog (falling back to models.dev v1 on failure), persists it
-    /// to KV (`models-dev:v2:catalog` + `:meta` in upstream envelope format) and disk (`<cache>/models.json`),
+    /// to KV (`models-dev:v3:catalog` + `:meta` in upstream envelope format) and disk (`<cache>/models.json`),
     /// refreshes `modelsDev`, and returns `true` if catalog content changed.
     @discardableResult
     public static func refreshModelsDevCatalog(
@@ -1596,7 +1597,10 @@ public enum ServerLiveRuntime {
             previousDigest = d
         }
         if let kv {
-            // Write upstream's exact `{ updatedAt, digest, body }` envelope so real ~/.local/share/opencode/opencode.db stays 100% compatible.
+            // Free legacy v1/v2 catalog rows and write upstream's exact `{ updatedAt, digest, body }` envelope.
+            for legacy in ["models-dev:catalog", "models-dev:catalog:meta", "models-dev:v2:catalog", "models-dev:v2:catalog:meta"] {
+                try? await kv.remove(legacy)
+            }
             try? await kv.set(modelsDevCatalogKVKey, value: .object([
                 "updatedAt": .int(now),
                 "digest": .string(digest),
@@ -1639,7 +1643,7 @@ public enum ServerLiveRuntime {
             )
         }
 
-        // 2. Check KV cache (`models-dev:v2:catalog` — supports both upstream `{ updatedAt, digest, body }` envelope and legacy string)
+        // 2. Check KV cache (`models-dev:v3:catalog` — supports both upstream `{ updatedAt, digest, body }` envelope and legacy string)
         if let kv, let raw = try? await kv.get(modelsDevCatalogKVKey),
            let text = extractKVCatalogText(raw)
         {

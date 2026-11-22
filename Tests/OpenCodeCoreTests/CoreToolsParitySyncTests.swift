@@ -567,6 +567,93 @@ struct CoreProvidersSyncTests {
             try await CorePlugin.ChatGPTProvider.revoke(missing, app: PluginContract.App(name: "o", version: "1", channel: "local"), transport: transport)
         }
     }
+
+    @Test("refresh asks to connect again only when OpenAI rejects the refresh token with invalid_grant")
+    func refreshInvalidGrantHandling() async throws {
+        let seen = Mutex<[HTTPRequest]>([])
+        let transport = LayerNodePlatform.FetchTransport { request in
+            seen.withLock { $0.append(request) }
+            if request.url.hasSuffix("/expired") {
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 400, headers: ["content-type": "application/json"]),
+                    body: Array(#"{"error":"invalid_grant"}"#.utf8)
+                )
+            }
+            if request.url.hasSuffix("/invalid") {
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 400, headers: ["content-type": "application/json"]),
+                    body: Array(#"{"error":"invalid_request"}"#.utf8)
+                )
+            }
+            if request.url.hasSuffix("/error") {
+                return HTTPResponse(
+                    head: HTTPResponseHead(statusCode: 500, headers: [:]),
+                    body: Array("unavailable".utf8)
+                )
+            }
+            return HTTPResponse(
+                head: HTTPResponseHead(statusCode: 200, headers: ["content-type": "application/json"]),
+                body: Array(#"{"access_token":"new-access","refresh_token":"new-refresh","expires_in":1800,"scope":"openid profile"}"#.utf8)
+            )
+        }
+        let app = PluginContract.App(name: "opencode", version: "1.0.0", channel: "local")
+        let credential = CredentialSchema.OAuth(
+            methodID: CorePlugin.ChatGPTProvider.methodID,
+            refresh: "refresh-token",
+            access: "access",
+            expires: SchemaPrimitive.NonNegativeInt(rawValue: 1)!,
+            metadata: ["clientID": .string("oaiapp_issued")]
+        )
+
+        do {
+            _ = try await CorePlugin.ChatGPTProvider.refresh(credential, app: app, url: "https://auth.test/expired", transport: transport)
+            Issue.record("Expected RefreshError for invalid_grant")
+        } catch let error as CorePlugin.ChatGPTProvider.RefreshError {
+            #expect(error.message == "This ChatGPT sign-in has expired or was revoked. Connect again.")
+        }
+
+        do {
+            _ = try await CorePlugin.ChatGPTProvider.refresh(credential, app: app, url: "https://auth.test/invalid", transport: transport)
+            Issue.record("Expected RefreshError for invalid_request")
+        } catch let error as CorePlugin.ChatGPTProvider.RefreshError {
+            #expect(error.message == "Request failed: 400")
+        }
+
+        do {
+            _ = try await CorePlugin.ChatGPTProvider.refresh(credential, app: app, url: "https://auth.test/error", transport: transport)
+            Issue.record("Expected RefreshError for HTTP 500")
+        } catch let error as CorePlugin.ChatGPTProvider.RefreshError {
+            #expect(error.message == "Request failed: 500")
+        }
+
+        let refreshed = try await CorePlugin.ChatGPTProvider.refresh(
+            credential,
+            app: app,
+            url: "https://auth.test/ok",
+            transport: transport,
+            nowEpochMs: 1_770_000_000_000
+        )
+        #expect(refreshed.methodID == CorePlugin.ChatGPTProvider.methodID)
+        #expect(refreshed.access == "new-access")
+        #expect(refreshed.refresh == "new-refresh")
+        #expect(refreshed.expires.rawValue == 1_770_001_800_000)
+        #expect(refreshed.metadata?["clientID"] == .string("oaiapp_issued"))
+        #expect(refreshed.metadata?["scopes"] == .array([.string("openid"), .string("profile")]))
+
+        let missing = CredentialSchema.OAuth(
+            methodID: CorePlugin.ChatGPTProvider.methodID,
+            refresh: "r",
+            access: "a",
+            expires: .zero,
+            metadata: nil
+        )
+        do {
+            _ = try await CorePlugin.ChatGPTProvider.refresh(missing, app: app, url: "https://auth.test/ok", transport: transport)
+            Issue.record("Expected RefreshError for missing clientID")
+        } catch let error as CorePlugin.ChatGPTProvider.RefreshError {
+            #expect(error.message == "This ChatGPT connection has no registered client ID. Connect again.")
+        }
+    }
 }
 
 // MARK: - Home folder memory

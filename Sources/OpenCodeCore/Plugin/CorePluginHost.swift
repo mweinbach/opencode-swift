@@ -4587,7 +4587,7 @@ public enum CorePlugin {
                         && ((model.type ?? .chat) != .chat || CoreModel.Model.supportsText(model))
                         && !(snap.info.id == .amazonBedrock && bedrockProfileOnlyIDs.contains(model.modelID.rawValue))
                 }
-                return CoreModel.ModelsDev.Snapshot(info: snap.info, models: filteredModels, environment: snap.environment)
+                return CoreModel.ModelsDev.Snapshot(info: snap.info, models: filteredModels, voices: snap.voices, environment: snap.environment)
             }
             .filter { !$0.models.isEmpty }
     }
@@ -7803,12 +7803,112 @@ public enum CorePlugin {
             existing
         }
 
+        public static let tokenURL = "https://auth.openai.com/api/accounts/oauth/token"
         public static let revokeURL = "https://auth.openai.com/api/accounts/oauth/revoke"
+        public static let resource = "https://api.openai.com/v1"
+        public static let methodID = IntegrationMethodID(rawValue: "chatgpt-token-sharing")
+        public static let expiredOrRevokedMessage = "This ChatGPT sign-in has expired or was revoked. Connect again."
 
         public struct RevokeError: Swift.Error, Equatable, Sendable, CustomStringConvertible {
             public let message: String
             public init(_ message: String) { self.message = message }
             public var description: String { message }
+        }
+
+        public struct RefreshError: Swift.Error, Equatable, Sendable, CustomStringConvertible {
+            public let message: String
+            public init(_ message: String) { self.message = message }
+            public var description: String { message }
+        }
+
+        private struct InvalidGrantBody: Decodable {
+            let error: String
+        }
+
+        private struct TokenResponse: Decodable {
+            let access_token: String
+            let refresh_token: String
+            let id_token: String?
+            let expires_in: Double?
+            let scope: String?
+        }
+
+        /// Returns `true` when an OAuth error response body decodes to `{ "error": "invalid_grant" }`.
+        public static func isInvalidGrantResponse(_ body: [UInt8]) -> Bool {
+            guard let decoded = try? JSONDecoder().decode(InvalidGrantBody.self, from: Data(body)) else {
+                return false
+            }
+            return decoded.error == "invalid_grant"
+        }
+
+        /// Refreshes a ChatGPT OAuth credential using its registered client ID, turning OpenAI's
+        /// `invalid_grant` response into an actionable reconnect message.
+        // parity: core/src/plugin/provider/chatgpt.ts#refresh [status=implemented hash=df3a3b295e7b]
+        public static func refresh(
+            _ value: CredentialSchema.OAuth,
+            app: PluginContract.App,
+            url: String = tokenURL,
+            transport: any HTTPTransport,
+            nowEpochMs: Int64? = nil
+        ) async throws -> CredentialSchema.OAuth {
+            guard case .string(let clientID) = value.metadata?["clientID"] else {
+                throw RefreshError("This ChatGPT connection has no registered client ID. Connect again.")
+            }
+            var existingScopes: [String]? = nil
+            if let scopesVal = value.metadata?["scopes"] {
+                guard case .array(let items) = scopesVal else {
+                    throw RefreshError("This ChatGPT connection has no registered client ID. Connect again.")
+                }
+                var parsed: [String] = []
+                for item in items {
+                    guard case .string(let s) = item else {
+                        throw RefreshError("This ChatGPT connection has no registered client ID. Connect again.")
+                    }
+                    parsed.append(s)
+                }
+                existingScopes = parsed
+            }
+            let appInfo = CoreSubsystems.App.Info(name: app.name, version: app.version, channel: app.channel)
+            let request = HTTPRequest(
+                method: "POST",
+                url: url,
+                headers: [
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "User-Agent": CoreSubsystems.App.useragent(appInfo),
+                ],
+                body: Array(formEncode([
+                    ("grant_type", "refresh_token"),
+                    ("client_id", clientID),
+                    ("refresh_token", value.refresh),
+                    ("resource", resource),
+                ]).utf8)
+            )
+            let response = try await transport.send(request)
+            guard (200..<300).contains(response.head.statusCode) else {
+                if isInvalidGrantResponse(response.body) {
+                    throw RefreshError(expiredOrRevokedMessage)
+                }
+                throw RefreshError("Request failed: \(response.head.statusCode)")
+            }
+            let tokens = try JSONDecoder().decode(TokenResponse.self, from: Data(response.body))
+            let now = nowEpochMs ?? Flock.currentEpochMs()
+            let expiresMs = now + Int64((tokens.expires_in ?? 3600) * 1000)
+            let scopes = tokens.scope?
+                .split(separator: " ")
+                .filter { !$0.isEmpty }
+                .map(String.init)
+                ?? existingScopes
+                ?? []
+            return CredentialSchema.OAuth(
+                methodID: methodID,
+                refresh: tokens.refresh_token,
+                access: tokens.access_token,
+                expires: SchemaPrimitive.NonNegativeInt(rawValue: Int(max(0, expiresMs))) ?? .zero,
+                metadata: [
+                    "clientID": .string(clientID),
+                    "scopes": .array(scopes.map(JSONValue.string)),
+                ]
+            )
         }
 
         /// `URLSearchParams.toString()`: `application/x-www-form-urlencoded` with spaces as `+`.
@@ -8904,7 +9004,7 @@ public enum CorePlugin {
                 integrationID: "opencode",
                 method: PluginEffect.IntegrationOAuthMethod(
                     id: methodID.rawValue,
-                    label: "OpenCode Console account",
+                    label: "OpenCode account",
                     form: FormSchema.Fields(
                         first: .string(FormSchema.StringField(
                             key: "server",
@@ -9077,7 +9177,7 @@ public enum CorePlugin {
         }
     }
 
-    // parity: core/src/plugin/provider/opencode.ts#OpencodePlugin [status=adapted hash=3076ea9e0683]
+    // parity: core/src/plugin/provider/opencode.ts#OpencodePlugin [status=adapted hash=41b0465b8f27]
     public static let OpencodePlugin = PluginEffect.define(
         PluginEffect.Plugin(id: "opencode.provider.opencode") { ctx in
             let env = Host.currentEnvironment
@@ -9258,7 +9358,7 @@ public enum CorePlugin {
 
             _ = await ctx.integration.transform { editor in
                 editor.update("opencode") { integration in
-                    integration.name = "OpenCode Console"
+                    integration.name = "OpenCode"
                 }
                 editor.method.update(.oauth(OpencodeConsole.oauthRegistration(http: consoleHTTP)))
                 editor.method.update(.key(

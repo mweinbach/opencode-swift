@@ -1707,7 +1707,7 @@ public enum ConfigSchema {
         }
     }
 
-    // parity: schema/src/config.ts#Info [status=implemented hash=6d5ac906dbee]
+    // parity: schema/src/config.ts#Info [status=implemented hash=488b7d4b748e]
     public struct Info: Equatable, Hashable, Sendable, Codable {
         public let schema: String?
         public let shell: String?
@@ -1719,7 +1719,7 @@ public enum ConfigSchema {
         public let username: String?
         public let timezone: String?
         /// Run prompts, shell commands or Code Mode actions on a timer, on a cron schedule, or on push events from
-        /// connected MCP servers. Defaults to true; set false to disable. MCP events still require experimental.mcp_events.
+        /// connected MCP servers. Defaults to true; set false to disable.
         public let automations: Bool?
         public let permissions: PermissionSchema.Ruleset?
         public let policies: [ConfigPolicySchema.Info]?

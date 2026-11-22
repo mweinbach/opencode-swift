@@ -1283,16 +1283,19 @@ public enum TUIComponent {
         "opencode": 0, "opencode-go": 1, "openai": 2, "github-copilot": 3, "anthropic": 4, "google": 5,
     ]
 
-    // parity: tui/src/component/dialog-integration.tsx#integrationOptions [status=implemented hash=0cd4f5843c6c]
+    // OpenCode Go connects through OpenCode, so it's only listed for people who already saved a Go key.
+    // parity: tui/src/component/dialog-integration.tsx#integrationOptions [status=implemented hash=7f2af0d3f32b]
     public static func integrationOptions(_ list: [IntegrationItem]) -> [IntegrationItem] {
-        list.sorted { a, b in
-            let pa = integrationPriority[a.id] ?? 99
-            let pb = integrationPriority[b.id] ?? 99
-            if pa != pb { return pa < pb }
-            let nameCmp = a.name.localizedStandardCompare(b.name)
-            if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
-            return a.id < b.id
-        }
+        list
+            .filter { $0.id != "opencode-go" || !credentialConnections($0).isEmpty }
+            .sorted { a, b in
+                let pa = integrationPriority[a.id] ?? 99
+                let pb = integrationPriority[b.id] ?? 99
+                if pa != pb { return pa < pb }
+                let nameCmp = a.name.localizedStandardCompare(b.name)
+                if nameCmp != .orderedSame { return nameCmp == .orderedAscending }
+                return a.id < b.id
+            }
     }
 
     // parity: tui/src/component/dialog-integration.tsx#connectMethods [status=implemented hash=19822749443d]

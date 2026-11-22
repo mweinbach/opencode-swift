@@ -203,16 +203,16 @@ public enum ServerLiveOAuth {
             throw CoreIntegration.Integration.AuthorizationError(message: "OAuth flow must be executed via ServerLiveOAuthManager")
         }
 
-        // 1. OpenCode Console ('opencode'): device flow with hidden server field
+        // 1. OpenCode ('opencode'): device flow with hidden server field
         let opencodeID = IntegrationID(rawValue: "opencode")
         editor.update(opencodeID) { existing in
-            IntegrationSchema.Ref(id: opencodeID, name: "OpenCode Console", metadata: existing.metadata)
+            IntegrationSchema.Ref(id: opencodeID, name: "OpenCode", metadata: existing.metadata)
         }
         editor.updateMethod(.oauth(CoreIntegration.Integration.OAuthImplementation(
             integrationID: opencodeID,
             method: IntegrationSchema.OAuthMethod(
                 id: openCodeMethodID,
-                label: "OpenCode Console account",
+                label: "OpenCode account",
                 form: FormSchema.Fields(
                     first: .string(FormSchema.StringField(
                         key: "server",
@@ -1272,6 +1272,11 @@ public final class ServerLiveOAuthManager: Sendable {
             body: Array(ServerLiveOAuth.formURLEncode(params).utf8)
         ))
         guard (200..<300).contains(resp.head.statusCode) else {
+            if !isLegacy && CorePlugin.ChatGPTProvider.isInvalidGrantResponse(resp.body) {
+                throw CoreIntegration.Integration.AuthorizationError(
+                    message: CorePlugin.ChatGPTProvider.expiredOrRevokedMessage
+                )
+            }
             throw CoreIntegration.Integration.AuthorizationError(
                 message: "OpenAI token refresh failed (HTTP \(resp.head.statusCode))"
             )

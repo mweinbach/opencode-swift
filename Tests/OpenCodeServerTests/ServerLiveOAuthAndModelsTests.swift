@@ -28,11 +28,11 @@ struct ServerLiveOAuthAndModelsTests {
             }.first
         }
 
-        // 1. OpenCode Console ('opencode'): device + hidden server field
+        // 1. OpenCode ('opencode'): device + hidden server field
         let opencodeInt = try #require(byID["opencode"])
-        #expect(opencodeInt.name == "OpenCode Console")
+        #expect(opencodeInt.name == "OpenCode")
         let opencodeOAuth = try #require(oauthMethod(on: "opencode", methodID: "device"))
-        #expect(opencodeOAuth.label == "OpenCode Console account")
+        #expect(opencodeOAuth.label == "OpenCode account")
         let serverField = try #require(opencodeOAuth.form?.elements.first)
         if case .string(let sf) = serverField {
             #expect(sf.key == "server")
@@ -1001,5 +1001,45 @@ struct ServerLiveOAuthAndModelsTests {
         #expect(errResp.contentType?.contains("text/html") == true)
         #expect(errResp.body.contains("Authorization failed"))
         #expect(errResp.body.contains("Invalid OAuth state"))
+    }
+
+    @Test("Experimental voice routes list models.dev voice models with name/engine and forward WebRTC SDP + session")
+    func experimentalVoiceRoutesWithModelsDevAndSession() async throws {
+        let recordedLiveBody = Mutex<String?>(nil)
+        let harness = try await LiveOAuthFixture.makeHarness(
+            env: ["OPENAI_API_KEY": "sk-voice-server"],
+            modelsFetch: false
+        ) { req in
+            if req.url == "https://api.openai.com/v1/live/sessions" && req.method == "POST" {
+                recordedLiveBody.withLock { $0 = req.bodyText }
+                return .json(body: #"{"transport":{"type":"webrtc","sdp":"v=0\r\ns=server-answer"}}"#)
+            }
+            return .json(status: 404, body: "{}")
+        }
+        defer { Task { await harness.close() } }
+
+        let models = try await harness.client.experimental.voice.models()
+        #expect(models.defaultModel == "gpt-live-1.1")
+        let first = try #require(models.models.first)
+        #expect(first.model == "gpt-live-1.1")
+        #expect(first.name == "GPT-Live 1.1")
+        #expect(first.engine == "openai-live")
+        #expect(first.provider == "openai")
+        #expect(first.transports == [VoiceTransportType.webrtc])
+        #expect(first.available == true)
+
+        let session = try await harness.client.experimental.voice.session(ExperimentalVoiceSessionInput(
+            model: "gpt-live-1.1",
+            session: .object(["voice": .string("marin")]),
+            transport: .webrtc(VoiceWebRTCTransportInput(sdp: "v=0\r\ns=client-offer"))
+        ))
+        if case .webrtc(let answer) = session.transport {
+            #expect(answer.sdp == "v=0\r\ns=server-answer")
+        } else {
+            Issue.record("Expected webrtc transport answer")
+        }
+        let body = try #require(recordedLiveBody.withLock { $0 })
+        #expect(body.contains("client-offer"))
+        #expect(body.contains("marin"))
     }
 }

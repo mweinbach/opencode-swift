@@ -7199,8 +7199,9 @@ public enum AIExperimental {
     // parity: ai/src/experimental/realtime.ts#RealtimeSession [status=implemented hash=c3a14f5909c5]
     public typealias RealtimeSession = [String: JSONValue]
 
-    // parity: ai/src/experimental/realtime.ts#RealtimeConnectInput [status=implemented hash=2c59b135cc85]
+    // parity: ai/src/experimental/realtime.ts#RealtimeConnectInput [status=implemented hash=0c2f692b0016]
     public struct RealtimeConnectInput: Sendable {
+        public let engine: RealtimeEngine
         public let model: String
         public let apiKey: AIAuth.RedactedSecret
         public let baseURL: String?
@@ -7210,6 +7211,7 @@ public enum AIExperimental {
         public let transport: RealtimeTransportInput
 
         public init(
+            engine: RealtimeEngine,
             model: String,
             apiKey: AIAuth.RedactedSecret,
             baseURL: String? = nil,
@@ -7218,6 +7220,7 @@ public enum AIExperimental {
             session: RealtimeSession? = nil,
             transport: RealtimeTransportInput
         ) {
+            self.engine = engine
             self.model = model
             self.apiKey = apiKey
             self.baseURL = baseURL
@@ -7228,42 +7231,41 @@ public enum AIExperimental {
         }
     }
 
-    public struct RealtimeEngineSpec: Equatable, Hashable, Sendable {
-        public let family: String
-        public let model: String
+    // parity: ai/src/experimental/realtime.ts#RealtimeEngine [status=implemented hash=08f1a6ea0f82]
+    public struct RealtimeEngine: Equatable, Hashable, Sendable {
         public let id: String
         public let provider: String
+        public let api: String
         public let transports: [RealtimeTransportType]
+
+        public init(id: String, provider: String, api: String, transports: [RealtimeTransportType]) {
+            self.id = id
+            self.provider = provider
+            self.api = api
+            self.transports = transports
+        }
     }
 
-    // parity: ai/src/experimental/realtime.ts#engines [status=implemented hash=f7ead25b8654]
-    public static let engines: [RealtimeEngineSpec] = [
-        RealtimeEngineSpec(family: "gpt-live", model: "gpt-live-1", id: "openai-live", provider: "openai", transports: [.webrtc]),
-        RealtimeEngineSpec(family: "gpt-realtime", model: "gpt-realtime-2.1", id: "openai-realtime", provider: "openai", transports: [.webrtc, .websocket]),
-        RealtimeEngineSpec(family: "grok-voice", model: "grok-voice-3.0", id: "xai-realtime", provider: "xai", transports: [.websocket]),
-        RealtimeEngineSpec(family: "gemini-3.8-live", model: "gemini-3.8-live", id: "gemini-live", provider: "google", transports: [.websocket]),
+    // The voice APIs this package speaks, by provider and models.dev API. Which models they start comes from models.dev.
+    // parity: ai/src/experimental/realtime.ts#engines [status=implemented hash=71f81ce6395d]
+    public static let engines: [RealtimeEngine] = [
+        RealtimeEngine(id: "openai-live", provider: "openai", api: "live", transports: [.webrtc]),
+        RealtimeEngine(id: "openai-realtime", provider: "openai", api: "realtime", transports: [.webrtc, .websocket]),
+        RealtimeEngine(id: "xai-realtime", provider: "xai", api: "realtime", transports: [.websocket]),
+        RealtimeEngine(id: "gemini-live", provider: "google", api: "bidi-generate-content", transports: [.websocket]),
     ]
-
-    // parity: ai/src/experimental/realtime.ts#engine [status=implemented hash=bfd81fbf9bbb]
-    public static func engine(_ model: String) -> RealtimeEngineSpec? {
-        engines.first { model == $0.family || model.hasPrefix("\($0.family)-") }
-    }
 
     private static let openaiRealtimeBase = "https://api.openai.com/v1"
     private static let xaiRealtimeBase = "https://api.x.ai/v1"
     private static let googleRealtimeBase = "https://generativelanguage.googleapis.com/v1beta"
 
-    // parity: ai/src/experimental/realtime.ts#connect [status=implemented hash=4d6eaf7e9751]
+    // parity: ai/src/experimental/realtime.ts#connect [status=implemented hash=e351ef36ca81]
     public static func connect(
         _ input: RealtimeConnectInput,
         executor: AIRequestExecutor.RequestExecutorService,
         nowEpochMs: Double? = nil
     ) async throws -> RealtimeTransport {
-        guard let resolved = engine(input.model) else {
-            throw AISchema.AIError(reason: .invalidRequest(AISchema.InvalidRequestError(
-                message: "Unsupported voice model: \(input.model)"
-            )))
-        }
+        let resolved = input.engine
         guard resolved.transports.contains(input.transport.type) else {
             let allowed = resolved.transports.map(\.rawValue).joined(separator: ", ")
             throw AISchema.AIError(reason: .invalidRequest(AISchema.InvalidRequestError(
@@ -7478,10 +7480,9 @@ public enum AIExperimental {
         return "\(pad(Int(year), width: 4))-\(pad(Int(m), width: 2))-\(pad(Int(d), width: 2))T\(pad(hour, width: 2)):\(pad(minute, width: 2)):\(pad(second, width: 2)).\(pad(ms, width: 3))Z"
     }
 
-    // parity: ai/src/experimental/realtime.ts#Realtime [status=implemented hash=7abadb86cf2d]
+    // parity: ai/src/experimental/realtime.ts#Realtime [status=implemented hash=1f6bc7b762ed]
     public enum Realtime {
-        public static var engines: [RealtimeEngineSpec] { AIExperimental.engines }
-        public static func engine(_ model: String) -> RealtimeEngineSpec? { AIExperimental.engine(model) }
+        public static var engines: [RealtimeEngine] { AIExperimental.engines }
         public static func connect(
             _ input: RealtimeConnectInput,
             executor: AIRequestExecutor.RequestExecutorService,

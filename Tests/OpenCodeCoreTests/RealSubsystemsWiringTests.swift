@@ -576,9 +576,17 @@ struct RealSubsystemsWiringTests {
         let voice = CoreIntegration.Voice.Service(integrations: integrations, http: mockHTTP)
 
         let models = try await voice.models()
-        #expect(models.models.first { $0.model == "grok-voice-3.0" }?.available == true)
-        #expect(models.models.first { $0.model == "gpt-live-1" }?.provider == "opencode")
-        #expect(models.models.first { $0.model == "gpt-live-1" }?.available == true)
+        let grokInfo = try #require(models.models.first { $0.model == "grok-voice-3.0" })
+        #expect(grokInfo.name == "Grok Voice 3.0")
+        #expect(grokInfo.engine == "xai-realtime")
+        #expect(grokInfo.available == true)
+        let liveInfo = try #require(models.models.first { $0.model == "gpt-live-1" })
+        #expect(liveInfo.name == "GPT-Live 1")
+        #expect(liveInfo.engine == "openai-live")
+        #expect(liveInfo.provider == "opencode")
+        #expect(liveInfo.available == true)
+        // Because OpenCode only hosts gpt-live-1 (not gpt-live-1.1), gpt-live-1.1 is not listed when hosted via opencode.
+        #expect(!models.models.contains { $0.model == "gpt-live-1.1" })
         #expect(models.models.first { $0.model == "gemini-3.8-live" }?.available == false)
 
         // Real WebSocket ephemeral token negotiation for xAI grok-voice-3.0
@@ -600,13 +608,83 @@ struct RealSubsystemsWiringTests {
         #expect(liveSession["type"] == .string("webrtc"))
         #expect(liveSession["sdp"] == .string("v=0\r\ns=answer-sdp"))
 
-        // Missing Google API key throws UnavailableError; unknown model throws InvalidRequestError
+        // Missing Google API key throws UnavailableError; unknown/unlisted model throws InvalidRequestError listing server models
         await #expect(throws: CoreIntegration.Voice.UnavailableError.self) {
             _ = try await voice.session(CoreIntegration.Voice.SessionInput(model: "gemini-3.8-live", transport: "websocket"))
         }
-        await #expect(throws: CoreIntegration.Voice.InvalidRequestError.self) {
-            _ = try await voice.session(CoreIntegration.Voice.SessionInput(model: "nonexistent-voice", transport: "websocket"))
+        do {
+            _ = try await voice.session(CoreIntegration.Voice.SessionInput(model: "gpt-live-1.1", transport: "webrtc", sdp: "v=0"))
+            Issue.record("Expected InvalidRequestError for unlisted voice model")
+        } catch let err as CoreIntegration.Voice.InvalidRequestError {
+            #expect(err.message.hasPrefix("Unsupported voice model: gpt-live-1.1. This server lists "))
+            #expect(err.message.contains("gpt-live-1"))
+            #expect(err.message.contains("grok-voice-3.0"))
         }
+    }
+
+    @Test("CoreIntegration.Voice.Service sorts models.dev voice models newest-first per engine and picks first available default")
+    func voiceServiceListsFromModelsDevCatalogNewestFirst() async throws {
+        let creds = try CoreProvider.Credential.Service.inMemory()
+        let integrations = CoreIntegration.Integration.Service(
+            credentials: creds,
+            environment: RealSubsystemsWiringHelper.MockEnv(vars: [:])
+        )
+        _ = try await integrations.transform { editor in
+            editor.update(IntegrationID(rawValue: "openai")) { ref in
+                CoreIntegration.Integration.Ref(id: ref.id, name: "OpenAI")
+            }
+            editor.update(IntegrationID(rawValue: "opencode")) { ref in
+                CoreIntegration.Integration.Ref(id: ref.id, name: "OpenCode")
+            }
+        }
+        try await integrations.connectKey(
+            integrationID: IntegrationID(rawValue: "openai"),
+            key: "sk-openai-voice",
+            answer: nil,
+            label: "Active"
+        )
+
+        func makeSnap(_ id: String, voices: [CoreModel.ModelsDev.VoiceModel]) -> CoreModel.ModelsDev.Snapshot {
+            CoreModel.ModelsDev.Snapshot(
+                info: ProviderSchema.Info(
+                    id: ProviderSchema.ID(rawValue: id),
+                    name: id,
+                    activation: .auto,
+                    package: "@opencode/ai/providers/openai"
+                ),
+                models: [],
+                voices: voices,
+                environment: []
+            )
+        }
+
+        let catalog = CoreModel.ModelsDev.StaticService(snapshots: [
+            makeSnap("openai", voices: [
+                CoreModel.ModelsDev.VoiceModel(id: "gpt-live-1", name: "GPT-Live 1", api: "live", releaseDate: "2026-09-10"),
+                CoreModel.ModelsDev.VoiceModel(id: "gpt-realtime-2.1", name: "GPT-Realtime-2.1", api: "realtime", releaseDate: "2026-07-06"),
+                CoreModel.ModelsDev.VoiceModel(id: "gpt-live-1.1", name: "GPT-Live 1.1", api: "live", releaseDate: "2026-11-19"),
+            ]),
+            makeSnap("xai", voices: [
+                CoreModel.ModelsDev.VoiceModel(id: "grok-voice-3.0", name: "Grok Voice 3.0", api: "realtime", releaseDate: "2026-10-14"),
+            ]),
+            makeSnap("google", voices: [
+                CoreModel.ModelsDev.VoiceModel(id: "gemini-3.8-live", name: "Gemini 3.8 Live", api: "bidi-generate-content", releaseDate: "2026-09-15"),
+            ]),
+            makeSnap("opencode", voices: [
+                CoreModel.ModelsDev.VoiceModel(id: "gpt-live-1", name: "GPT-Live 1", api: "live", releaseDate: "2026-09-10"),
+            ]),
+        ])
+
+        let voice = CoreIntegration.Voice.Service(integrations: integrations, modelsDev: catalog)
+        let listed = try await voice.models()
+        #expect(listed.defaultModel == "gpt-live-1.1")
+        #expect(listed.models == [
+            CoreIntegration.Voice.ModelInfo(model: "gpt-live-1.1", name: "GPT-Live 1.1", engine: "openai-live", provider: "openai", transports: ["webrtc"], available: true),
+            CoreIntegration.Voice.ModelInfo(model: "gpt-live-1", name: "GPT-Live 1", engine: "openai-live", provider: "openai", transports: ["webrtc"], available: true),
+            CoreIntegration.Voice.ModelInfo(model: "gpt-realtime-2.1", name: "GPT-Realtime-2.1", engine: "openai-realtime", provider: "openai", transports: ["webrtc", "websocket"], available: true),
+            CoreIntegration.Voice.ModelInfo(model: "grok-voice-3.0", name: "Grok Voice 3.0", engine: "xai-realtime", provider: "xai", transports: ["websocket"], available: false),
+            CoreIntegration.Voice.ModelInfo(model: "gemini-3.8-live", name: "Gemini 3.8 Live", engine: "gemini-live", provider: "google", transports: ["websocket"], available: false),
+        ])
     }
 
     // MARK: - 7. Real Generate Service (text, image, decisions over OpenCodeAI routes) (P0 #11)
