@@ -324,7 +324,6 @@ struct CoreSync2Tests {
                 command: "cd /tmp && ls -la",
                 program: "/bin/sh",
                 target: target,
-                local: true,
                 once: false
             )
         )
@@ -342,7 +341,6 @@ struct CoreSync2Tests {
                 command: "# comment only",
                 program: "/bin/sh",
                 target: target,
-                local: true,
                 once: true
             )
         )
