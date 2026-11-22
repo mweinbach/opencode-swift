@@ -761,42 +761,108 @@ public enum CoreToolOutput {
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#TextContent [status=implemented hash=e70dc71ee752]
+        // parity: core/src/tool/read-filesystem.ts#TextContent [status=implemented hash=abbb90de2e59]
         public struct TextContent: Equatable, Hashable, Sendable, Codable {
-            public let content: String
             public let offset: Int
             public let lineCount: Int
             public let next: Int?
+            public let content: String
 
             public init(content: String, offset: Int, lineCount: Int, next: Int? = nil) {
-                self.content = content
                 self.offset = offset
                 self.lineCount = lineCount
                 self.next = next
+                self.content = content
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case type
+                case offset
+                case lineCount
+                case next
+                case content
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.offset = try container.decode(Int.self, forKey: .offset)
+                self.lineCount = try container.decode(Int.self, forKey: .lineCount)
+                self.next = try container.decodeIfPresent(Int.self, forKey: .next)
+                self.content = try container.decode(String.self, forKey: .content)
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode("text", forKey: .type)
+                try container.encode(offset, forKey: .offset)
+                try container.encode(lineCount, forKey: .lineCount)
+                try container.encodeIfPresent(next, forKey: .next)
+                try container.encode(content, forKey: .content)
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#DirectoryContent [status=implemented hash=e98c255d7517]
+        // parity: core/src/tool/read-filesystem.ts#DirectoryContent [status=implemented hash=1189344d8380]
         public struct DirectoryContent: Equatable, Hashable, Sendable, Codable {
-            public let entries: [String]
             public let next: Int?
+            public let entries: [String]
 
             public init(entries: [String], next: Int? = nil) {
-                self.entries = entries
                 self.next = next
+                self.entries = entries
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case type
+                case next
+                case entries
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.next = try container.decodeIfPresent(Int.self, forKey: .next)
+                self.entries = try container.decode([String].self, forKey: .entries)
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode("directory", forKey: .type)
+                try container.encodeIfPresent(next, forKey: .next)
+                try container.encode(entries, forKey: .entries)
             }
         }
 
-        // parity: core/src/tool/read-filesystem.ts#MediaContent [status=implemented hash=9559a652f9a1]
+        // parity: core/src/tool/read-filesystem.ts#MediaContent [status=implemented hash=72680eeca191]
         public struct MediaContent: Equatable, Hashable, Sendable, Codable {
-            public let uri: String
             public let mime: String
             public let name: String?
+            public let uri: String
 
             public init(uri: String, mime: String, name: String? = nil) {
-                self.uri = uri
                 self.mime = mime
                 self.name = name
+                self.uri = uri
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case type
+                case mime
+                case name
+                case uri
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.mime = try container.decode(String.self, forKey: .mime)
+                self.name = try container.decodeIfPresent(String.self, forKey: .name)
+                self.uri = try container.decode(String.self, forKey: .uri)
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode("media", forKey: .type)
+                try container.encode(mime, forKey: .mime)
+                try container.encodeIfPresent(name, forKey: .name)
+                try container.encode(uri, forKey: .uri)
             }
         }
 
@@ -1084,6 +1150,14 @@ public enum CoreToolOutput {
             public init(items: [T], truncated: Bool) {
                 self.items = items
                 self.truncated = truncated
+            }
+        }
+
+        /// Refuses a search where none can run yet: it needs a ripgrep binary the environment's spawner can start.
+        // parity: core/src/tool/search.ts#available [status=implemented hash=889b01afe9a5]
+        public static func available(_ environment: any CoreLocation.Environment.Interface) throws {
+            guard environment.searchable == true else {
+                throw AISchema.ToolFailure(message: "Search is not available on \(environment.id.rawValue) yet.")
             }
         }
 

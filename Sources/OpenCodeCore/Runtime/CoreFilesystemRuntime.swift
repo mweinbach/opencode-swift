@@ -157,40 +157,19 @@ public enum CoreFilesystem {
             case directory
         }
 
-        /// Where a typed path points.
-        // parity: core/src/file-access.ts#Place [status=implemented hash=91c8666b31cc]
-        public struct Place: Equatable, Hashable, Sendable, Codable {
-            public struct EnvironmentRef: Equatable, Hashable, Sendable, Codable {
-                public let id: CoreLocation.Environment.ID
+        /// @deprecated Use `CoreLocation.Environment.Place`. Removed in the next minor.
+        // parity: core/src/file-access.ts#Place [status=implemented hash=628550900731]
+        public typealias Place = CoreLocation.Environment.Place
 
-                public init(id: CoreLocation.Environment.ID) {
-                    self.id = id
-                }
-            }
-
-            public let absolute: SchemaPrimitive.AbsolutePath
-            public let environment: EnvironmentRef
-
-            public init(absolute: SchemaPrimitive.AbsolutePath, environment: EnvironmentRef) {
-                self.absolute = absolute
-                self.environment = environment
-            }
-
-            public init(absolute: String, environment id: CoreLocation.Environment.ID) {
-                self.absolute = SchemaPrimitive.AbsolutePath(rawValue: absolute)
-                self.environment = EnvironmentRef(id: id)
-            }
-        }
-
-        // parity: core/src/file-access.ts#ResolveInput [status=implemented hash=66b4d8c33498]
+        // parity: core/src/file-access.ts#ResolveInput [status=implemented hash=60d7ae5b6deb]
         public struct ResolveInput: Equatable, Hashable, Sendable, Codable {
             public let path: String
             /// Selects the external approval boundary; it does not validate the target type.
             public let kind: Kind?
             /// The directory and machine the text was written in, for a path derived from an existing target.
-            public let base: Place?
+            public let base: CoreLocation.Environment.Place?
 
-            public init(path: String, kind: Kind? = nil, base: Place? = nil) {
+            public init(path: String, kind: Kind? = nil, base: CoreLocation.Environment.Place? = nil) {
                 self.path = path
                 self.kind = kind
                 self.base = base
@@ -300,11 +279,18 @@ public enum CoreFilesystem {
             public let action: String
             public let resources: [String]
             public let save: [String]?
+            public let metadata: [String: JSONValue]?
 
-            public init(action: String, resources: [String], save: [String]? = nil) {
+            public init(
+                action: String,
+                resources: [String],
+                save: [String]? = nil,
+                metadata: [String: JSONValue]? = nil
+            ) {
                 self.action = action
                 self.resources = resources
                 self.save = save
+                self.metadata = metadata
             }
         }
 
@@ -344,9 +330,9 @@ public enum CoreFilesystem {
         }
 
         /// The rule "always" saves for a file action: every file on the target's machine.
-        // parity: core/src/file-access.ts#always [status=implemented hash=83f15bfee6fc]
+        // parity: core/src/file-access.ts#always [status=implemented hash=8ae57480ddd0]
         public static func always(_ target: Target) -> String {
-            target.machine.map { "\($0.rawValue):*" } ?? "*"
+            target.machine.map { MachinePath.format($0, "*") } ?? "*"
         }
 
         // parity: core/src/file-access.ts#Invocation [status=implemented hash=80b0595e56a1]
@@ -362,12 +348,12 @@ public enum CoreFilesystem {
             }
         }
 
-        // parity: core/src/file-access.ts#Interface [status=adapted hash=453a2b1e5a4d]
+        // parity: core/src/file-access.ts#Interface [status=adapted hash=bd62961e6df9]
         public protocol Interface: Sendable {
             /// Where a typed path points, from its text: no disk is touched and no machine is called. Only a path that
             /// starts at a machine's home consults anything: the home in that machine's live hello, held in memory. It
             /// fails when the machine is unknown or offline.
-            func locate(_ path: String, base: Place?) async throws -> Place
+            func locate(_ path: String, base: CoreLocation.Environment.Place?) async throws -> CoreLocation.Environment.Place
             /// Resolve a lexical path and its permission resources, without requesting approval.
             func resolve(_ input: ResolveInput) async throws -> Target
             /// Approve external directories in one batch, preserving first-seen resource order.
@@ -486,34 +472,36 @@ public enum CoreFilesystem {
                 return machines
             }
 
-            private func place(_ text: String, base: Place?, enabled: Bool) async throws -> Place {
+            private var workingDirectory: CoreLocation.Environment.WorkingDirectory {
+                CoreLocation.Environment.workingDirectory(directory: directory, environment: environment)
+            }
+
+            private func place(
+                _ text: String,
+                base: CoreLocation.Environment.Place?,
+                enabled: Bool
+            ) async throws -> CoreLocation.Environment.Place {
                 // Only text the model typed can name a machine: text derived from a target is a plain path on that
                 // target's machine, and a shell there does not understand `gpu:`.
-                let parsed = base == nil && enabled ? MachinePath.parse(text) : nil
-                // A machine path is absolute or starts with ~/, so `gpu:work` is no machine path and would quietly be this
-                // server's folder. Only a name that is a machine here is refused: another name stays a local folder, as before.
+                let parsed: MachinePath.Parsed?
                 if base == nil && enabled {
-                    let scalars = text.unicodeScalars
-                    if let colon = scalars.firstIndex(of: ":"), colon > scalars.startIndex {
-                        let name = String(Substring(scalars[..<colon]))
-                        let rest = Substring(scalars[scalars.index(after: colon)...])
-                        if Machines.Name.isValid(name),
-                           !rest.hasPrefix("/"),
-                           !rest.hasPrefix("~"),
-                           let machines,
-                           await machines.list().contains(where: { $0.id == name })
-                        {
-                            throw CoreLocation.Environment.Files.Failed(
-                                path: text,
-                                cause: MachinePath.NotAbsolute(machine: name)
-                            )
+                    if let machines {
+                        do {
+                            parsed = try await MachinePath.typed(text, machines: machines)
+                        } catch {
+                            throw CoreLocation.Environment.Files.Failed(path: text, cause: error)
                         }
+                    } else {
+                        parsed = MachinePath.parse(text)
                     }
+                } else {
+                    parsed = nil
                 }
-                let id = parsed.map { CoreLocation.Environment.ID.make($0.machine) } ?? base?.environment.id ?? environment.id
+                let from = base ?? workingDirectory.place
+                let id = parsed.map { CoreLocation.Environment.ID.make($0.machine) } ?? from.environment.id
                 if parsed == nil && id == environment.id {
-                    return Place(
-                        absolute: FileAccess.resolvePath(directory: base?.absolute.rawValue ?? directory, input: text, home: home),
+                    return CoreLocation.Environment.Place(
+                        absolute: FileAccess.resolvePath(directory: from.absolute.rawValue, input: text, home: home),
                         environment: id
                     )
                 }
@@ -537,10 +525,13 @@ public enum CoreFilesystem {
                     throw CoreLocation.Environment.Files.Failed(path: text, cause: MachinePath.NotAbsolute(machine: id.rawValue))
                 }
                 let absolute = base.map { FileAccess.posixResolve($0.absolute.rawValue, rooted) } ?? FileAccess.posixNormalize(rooted)
-                return Place(absolute: absolute, environment: id)
+                return CoreLocation.Environment.Place(absolute: absolute, environment: id)
             }
 
-            public func locate(_ path: String, base: Place? = nil) async throws -> Place {
+            public func locate(
+                _ path: String,
+                base: CoreLocation.Environment.Place? = nil
+            ) async throws -> CoreLocation.Environment.Place {
                 let enabled = await machinesEnabled()
                 return try await place(path, base: base, enabled: enabled)
             }
@@ -555,16 +546,17 @@ public enum CoreFilesystem {
                 }
                 let abs = located.absolute.rawValue
                 let absolute = located.absolute
-                let isInternal = FSPathUtil.contains(parent: directory, child: abs)
+                let workdir = workingDirectory.absolute.rawValue
+                let isInternal = FSPathUtil.contains(parent: workdir, child: abs)
                     || (worktree != "/" && FSPathUtil.contains(parent: worktree, child: abs))
                 if isInternal {
-                    let rel = FSPathUtil.posixRelative(from: directory, to: abs)
+                    let rel = FSPathUtil.posixRelative(from: workdir, to: abs)
                     let relative = rel.isEmpty ? "." : rel
                     return Target(
                         absolute: absolute,
-                        // With machines on, a local folder can be named like a machine path; `./` keeps its permission
-                        // name its own.
-                        resource: enabled && MachinePath.parse(relative) != nil ? "./\(relative)" : relative,
+                        // With machines on, a local folder can be named like a machine path, and its permission name
+                        // stays its own.
+                        resource: enabled ? MachinePath.local(relative) : relative,
                         externalDirectory: nil,
                         environment: environment
                     )
@@ -595,7 +587,7 @@ public enum CoreFilesystem {
 
             /// A machine path is always external, and its resources carry the machine name so its rules never settle a
             /// local path's. Type detection runs over the machine's own files; a saved rule is the directory's own glob.
-            private func machineTarget(_ place: Place, kind: Kind?) async throws -> Target {
+            private func machineTarget(_ place: CoreLocation.Environment.Place, kind: Kind?) async throws -> Target {
                 let id = place.environment.id
                 let machineEnvironment: any CoreLocation.Environment.Interface
                 do {
@@ -617,16 +609,15 @@ public enum CoreFilesystem {
                     }
                 }
                 let directory = type == .directory ? place.absolute.rawValue : FileAccess.posixDirname(place.absolute.rawValue)
-                let prefix = "\(id.rawValue):"
-                let glob = "\(prefix)\(FileAccess.posixJoin(directory, "*"))"
+                let contents = MachinePath.format(id, FileAccess.posixJoin(directory, "*"))
                 return Target(
                     absolute: place.absolute,
-                    resource: "\(prefix)\(place.absolute.rawValue)",
+                    resource: MachinePath.format(id, place.absolute.rawValue),
                     externalDirectory: ExternalDirectoryAuthorization(
                         action: "external_directory",
                         directory: SchemaPrimitive.AbsolutePath(rawValue: directory),
-                        resource: glob,
-                        save: glob
+                        resource: contents,
+                        save: contents
                     ),
                     environment: machineEnvironment,
                     machine: place.environment.id
@@ -812,11 +803,11 @@ public enum CoreFilesystem {
 
         /// A transaction lock target: a located place, or a typed path that is located first.
         public enum LockTarget: Equatable, Hashable, Sendable {
-            case place(FileAccess.Place)
+            case place(CoreLocation.Environment.Place)
             case path(String)
         }
 
-        // parity: core/src/file-mutation.ts#Interface [status=adapted hash=3176c93b10f0]
+        // parity: core/src/file-mutation.ts#Interface [status=adapted hash=54f246fa6894]
         public protocol Interface: Sendable {
             /// Serialize a complete read/prepare/write mutation transaction by file. A typed path is located first, so
             /// it names its machine when the text does.

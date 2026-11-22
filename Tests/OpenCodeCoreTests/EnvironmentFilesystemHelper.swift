@@ -63,10 +63,14 @@ enum EnvironmentFilesystemHelper {
         var recorded: [ProcessSpec] { specs.withLock { $0 } }
     }
 
+    /// What a paired machine's environment says about itself (`machineFacts` in upstream `target-environment.ts`).
+    static let machineFacts = CoreLocation.Environment.Facts(path: .posix, shell: "sh")
+
     static func memoryEnvironment(
         _ id: CoreLocation.Environment.ID,
         files: [String: String] = [:],
-        spawner: any ProcessSpawner = CoreLocation.Environment.unavailableSpawner
+        spawner: any ProcessSpawner = CoreLocation.Environment.unavailableSpawner,
+        facts: CoreLocation.Environment.Facts = machineFacts
     ) async throws -> any CoreLocation.Environment.Interface {
         let driver = CoreLocation.Environment.makeMemoryDriver()
         for (path, text) in files {
@@ -75,7 +79,7 @@ enum EnvironmentFilesystemHelper {
             }
             try await driver.write(path, bytes: Array(text.utf8))
         }
-        return CoreLocation.Environment.Service(id: id, files: driver, spawner: spawner)
+        return CoreLocation.Environment.Service(id: id, files: driver, spawner: spawner, facts: facts)
     }
 
     static func encodeID(_ id: CoreLocation.Environment.ID) throws -> String {

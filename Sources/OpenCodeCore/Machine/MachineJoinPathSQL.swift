@@ -167,18 +167,52 @@ public enum MachinePath {
         public var description: String { message }
     }
 
-    /// Splits `gpu:/work/a` or `gpu:~/a` into a machine and the rest. A Windows drive or any URL is not one.
-    // parity: core/src/machine/path.ts#parse [status=implemented hash=2c0e8f965fb7]
-    public static func parse(_ text: String) -> Parsed? {
+    /// Splits `name:rest` at a name a machine could have. A Windows drive is not one.
+    private static func split(_ text: String) -> Parsed? {
         // Scalar-wise, as `indexOf` and `startsWith` compare code units, never grapheme clusters.
         let scalars = text.unicodeScalars
         guard let colon = scalars.firstIndex(of: ":"), colon > scalars.startIndex else { return nil }
         let machine = String(Substring(scalars[..<colon]))
         guard Machines.Name.isValid(machine) else { return nil }
-        let rest = scalars[scalars.index(after: colon)...]
-        guard let first = rest.first, first == "/" || first == "~" else { return nil }
-        if first == "/", rest.dropFirst().first == "/" { return nil }
-        return Parsed(machine: machine, path: String(Substring(rest)))
+        return Parsed(machine: machine, path: String(Substring(scalars[scalars.index(after: colon)...])))
+    }
+
+    private static func rooted(_ path: String) -> Bool {
+        guard let first = path.unicodeScalars.first else { return false }
+        return first == "/" || first == "~"
+    }
+
+    /// Splits `gpu:/work/a` or `gpu:~/a` into a machine and the rest. A Windows drive or any URL is not one.
+    // parity: core/src/machine/path.ts#parse [status=implemented hash=bdcae489c182]
+    public static func parse(_ text: String) -> Parsed? {
+        guard let named = split(text), rooted(named.path), !named.path.hasPrefix("//") else { return nil }
+        return named
+    }
+
+    /// Reads text someone typed: a machine path, or nothing when it is a path on this server. A machine path is
+    /// absolute or starts with `~/`, so `gpu:work` is no machine path and would quietly be this server's folder. Only
+    /// a name that is a machine here is refused: another name stays a local folder, as before.
+    // parity: core/src/machine/path.ts#typed [status=implemented hash=b20498904e5d]
+    public static func typed(_ text: String, machines: any Machines.Interface) async throws -> Parsed? {
+        if let parsed = parse(text) { return parsed }
+        guard let named = split(text), !rooted(named.path) else { return nil }
+        if await machines.list().contains(where: { $0.id == named.machine }) {
+            throw NotAbsolute(machine: named.machine)
+        }
+        return nil
+    }
+
+    /// A machine path's text: what `parse` reads back.
+    // parity: core/src/machine/path.ts#format [status=implemented hash=f95a99de863d]
+    public static func format(_ machine: CoreLocation.Environment.ID, _ path: String) -> String {
+        "\(machine.rawValue):\(path)"
+    }
+
+    /// A local path's text, kept from reading as a machine path: a folder here can be named like one, and `./` keeps
+    /// it local.
+    // parity: core/src/machine/path.ts#local [status=implemented hash=3d895b5700ee]
+    public static func local(_ path: String) -> String {
+        parse(path) != nil ? "./\(path)" : path
     }
 }
 

@@ -750,6 +750,97 @@ public enum CoreLocation {
         // parity: core/src/environment/environment.ts#localID [status=implemented hash=8b4e2b8c4caf]
         public static let localID: ID = ID.make("local")
 
+        /// Where a file or a directory is: an absolute path in an environment.
+        // parity: core/src/environment/environment.ts#Place [status=implemented hash=759d2744f27d]
+        public struct Place: Equatable, Hashable, Sendable, Codable {
+            public struct EnvironmentRef: Equatable, Hashable, Sendable, Codable {
+                public let id: ID
+
+                public init(id: ID) {
+                    self.id = id
+                }
+            }
+
+            public let absolute: SchemaPrimitive.AbsolutePath
+            public let environment: EnvironmentRef
+
+            public init(absolute: SchemaPrimitive.AbsolutePath, environment: EnvironmentRef) {
+                self.absolute = absolute
+                self.environment = environment
+            }
+
+            public init(absolute: String, environment id: ID) {
+                self.absolute = SchemaPrimitive.AbsolutePath(rawValue: absolute)
+                self.environment = EnvironmentRef(id: id)
+            }
+        }
+
+        /// Path rules for an environment's files (`node:path` `PlatformPath` semantics: `posix` vs `win32`).
+        public enum PathRules: String, Equatable, Hashable, Sendable, Codable {
+            case posix
+            case win32
+
+            /// The server's own path rules.
+            public static var host: PathRules {
+                Platform.current == .windows ? .win32 : .posix
+            }
+
+            public func dirname(_ path: String) -> String {
+                switch self {
+                case .posix:
+                    return CoreFilesystem.FileAccess.posixDirname(path)
+                case .win32:
+                    return CoreConfigDiscovery.dirname(path)
+                }
+            }
+
+            public func join(_ directory: String, _ name: String) -> String {
+                switch self {
+                case .posix:
+                    return CoreFilesystem.FileAccess.posixJoin(directory, name)
+                case .win32:
+                    return CoreConfigDiscovery.joinPath(directory, name)
+                }
+            }
+
+            public func normalize(_ path: String) -> String {
+                switch self {
+                case .posix:
+                    return CoreFilesystem.FileAccess.posixNormalize(path)
+                case .win32:
+                    return CoreConfigDiscovery.resolvePath(base: "/", relative: path)
+                }
+            }
+        }
+
+        /// What an environment says about itself, set by whoever makes it. Absent means no, or the server's own.
+        // parity: core/src/environment/environment.ts#Facts [status=implemented hash=7a6cda5a9546]
+        public struct Facts: Equatable, Hashable, Sendable, Codable {
+            /// The path rules of its files, when they are not the server's.
+            public let path: PathRules?
+            /// The shell every command there runs under, when it is not the configured one.
+            public let shell: String?
+            /// Whether this is the computer the server itself runs on, so a command there is the server's own child:
+            /// it starts from the server's variables, its cwd is made absolute here, the server's process daemon can
+            /// hold it, and the server's formatters reach its files.
+            public let hostsServer: Bool?
+            /// Whether a search can run over its files. It goes when the search tools no longer need a ripgrep binary
+            /// there.
+            public let searchable: Bool?
+
+            public init(
+                path: PathRules? = nil,
+                shell: String? = nil,
+                hostsServer: Bool? = nil,
+                searchable: Bool? = nil
+            ) {
+                self.path = path
+                self.shell = shell
+                self.hostsServer = hostsServer
+                self.searchable = searchable
+            }
+        }
+
         /// A two-phase process handle for spawners (like `MachineDriver`) that report start failures (`NotSent`,
         /// `Unknown`, `StartFailed`) before returning a running process handle whose exit can be awaited separately.
         public struct SpawnedProcess: Sendable {
@@ -772,12 +863,18 @@ public enum CoreLocation {
             func spawn(_ spec: ProcessSpec) async throws -> SpawnedProcess
         }
 
-        // parity: core/src/environment/environment.ts#Interface [status=implemented hash=28fec2c5f219]
+        // parity: core/src/environment/environment.ts#Interface [status=implemented hash=3a9ebf4ffa16]
         public protocol Interface: Sendable {
             var id: ID { get }
             var files: any Files.Interface { get }
             var spawner: any ProcessSpawner { get }
+            var path: PathRules? { get }
+            var shell: String? { get }
+            var hostsServer: Bool? { get }
+            var searchable: Bool? { get }
         }
+
+        public static func defaultFacts() -> Facts { Facts() }
 
         // parity: core/src/environment/environment.ts#Service [status=implemented hash=9274a0bff79e]
         public final class Service: Interface, Sendable {
@@ -785,32 +882,84 @@ public enum CoreLocation {
             public let id: ID
             public let files: any Files.Interface
             public let spawner: any ProcessSpawner
+            public let path: PathRules?
+            public let shell: String?
+            public let hostsServer: Bool?
+            public let searchable: Bool?
 
-            public init(id: ID = Environment.localID, driver: Driver) {
+            public init(id: ID = Environment.localID, driver: Driver, facts: Facts = Facts()) {
                 self.id = id
                 self.files = Environment.makeFiles(driver)
                 self.spawner = driver.spawner
+                self.path = facts.path
+                self.shell = facts.shell
+                self.hostsServer = facts.hostsServer
+                self.searchable = facts.searchable
             }
 
-            public init(id: ID = Environment.localID, files: any Files.Interface, spawner: any ProcessSpawner) {
+            public init(
+                id: ID = Environment.localID,
+                files: any Files.Interface,
+                spawner: any ProcessSpawner,
+                facts: Facts = Facts()
+            ) {
                 self.id = id
                 self.files = files
                 self.spawner = spawner
+                self.path = facts.path
+                self.shell = facts.shell
+                self.hostsServer = facts.hostsServer
+                self.searchable = facts.searchable
             }
         }
 
-        // parity: core/src/environment/environment.ts#make [status=implemented hash=7e95b2809bf7]
-        public static func make(_ id: ID, _ driver: Driver) -> any Interface {
-            Service(id: id, driver: driver)
+        // parity: core/src/environment/environment.ts#make [status=implemented hash=72a794e58052]
+        public static func make(_ id: ID, _ driver: Driver, facts: Facts = Facts()) -> any Interface {
+            Service(id: id, driver: driver, facts: facts)
         }
 
-        /// The server's own machine over `fileSystem` (the host disk by default) and the host spawner: the environment
-        /// a Location outside any workspace binds, for services constructed without a layer graph.
+        /// The computer the server runs on.
+        // parity: core/src/environment/environment.ts#local [status=implemented hash=fa10086b4407]
         public static func local(
             fileSystem: any OpenCodeFileSystem = LocalFileSystem.shared,
             spawner: any ProcessSpawner = CrossSpawnSpawner.HostProcessSpawner.shared
         ) -> any Interface {
-            make(localID, makeLocalDriver(spawner: spawner, fileSystem: fileSystem))
+            make(
+                localID,
+                makeLocalDriver(spawner: spawner, fileSystem: fileSystem),
+                facts: Facts(hostsServer: true, searchable: true)
+            )
+        }
+
+        /// The place of a path or a command that names no directory: the Location's directory, in its environment.
+        public struct WorkingDirectory: Sendable {
+            public let absolute: SchemaPrimitive.AbsolutePath
+            public let environment: any Interface
+
+            public init(absolute: SchemaPrimitive.AbsolutePath, environment: any Interface) {
+                self.absolute = absolute
+                self.environment = environment
+            }
+
+            public var place: Place {
+                Place(absolute: absolute, environment: Place.EnvironmentRef(id: environment.id))
+            }
+        }
+
+        /// The place of a path or a command that names no directory: the Location's directory, in its environment.
+        // parity: core/src/environment/environment.ts#workingDirectory [status=adapted hash=4f7d30422f85]
+        public static func workingDirectory(
+            location: any Location.Interface,
+            environment: any Interface
+        ) -> WorkingDirectory {
+            WorkingDirectory(absolute: location.info.directory, environment: environment)
+        }
+
+        public static func workingDirectory(
+            directory: String,
+            environment: any Interface
+        ) -> WorkingDirectory {
+            WorkingDirectory(absolute: SchemaPrimitive.AbsolutePath(rawValue: directory), environment: environment)
         }
 
         /// Shared host environment used as the default `environment` of targets and inputs built without one.
@@ -823,10 +972,14 @@ public enum CoreLocation {
                 let spawner = deps.get(CrossSpawnSpawner.spawnerKey, as: (any ProcessSpawner).self)
                     ?? CrossSpawnSpawner.HostProcessSpawner.shared
                 let location = deps.get(Location.Service.serviceKey, as: Location.Service.self)
-                let driver = makeLocalDriver(spawner: spawner)
-                // A workspace-bound Location names its environment after the workspace; otherwise it is this machine.
-                let id = location?.info.workspaceID.map { ID.make($0.rawValue) } ?? localID
-                return LayerNode.Output([Service.serviceKey: Service(id: id, driver: driver)])
+                if let workspaceID = location?.info.workspaceID {
+                    // A workspace runs ripgrep through its own spawner. Nothing of the server's reaches it otherwise.
+                    let driver = makeLocalDriver(spawner: spawner)
+                    return LayerNode.Output([
+                        Service.serviceKey: make(ID.make(workspaceID.rawValue), driver, facts: Facts(searchable: true))
+                    ])
+                }
+                return LayerNode.Output([Service.serviceKey: local(spawner: spawner)])
             },
             [CrossSpawnSpawner.node, Location.node]
         )

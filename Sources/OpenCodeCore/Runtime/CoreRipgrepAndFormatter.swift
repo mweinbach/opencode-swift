@@ -898,8 +898,8 @@ public enum CoreFormatter {
         }
 
         public func file(_ target: CoreFilesystem.FileAccess.Target) async -> Bool {
-            // A formatter is a process on this machine acting on this machine's disk.
-            if target.environment.id != CoreLocation.Environment.localID { return false }
+            // A formatter is the server's own child, acting on the server's own disk.
+            if target.environment.hostsServer != true { return false }
             let filepath = target.absolute.rawValue
             let ext = Self.fileExtension(filepath)
             let matching = state.withLock { s in

@@ -176,6 +176,11 @@ extension CoreTool {
             self.jobs = jobs
             self.config = config
         }
+
+        /// The place of a path or a command that names no directory: the Location's directory, in its environment.
+        public var workingDirectory: CoreLocation.Environment.WorkingDirectory {
+            CoreLocation.Environment.workingDirectory(directory: directory, environment: environment)
+        }
     }
 
     public struct ToolPluginDescriptor: Sendable {
@@ -295,8 +300,9 @@ extension CoreTool {
             ].joined(separator: " ")
         }
 
-        // parity: core/src/tool/plugin/read.ts#Plugin [status=adapted hash=5dfa5b9acaf6]
+        // parity: core/src/tool/plugin/read.ts#Plugin [status=adapted hash=955de1289ae1]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.read") { editor, env in
+            let workingDirectory = env.workingDirectory
             editor.add(RegisteredTool(
                 name: name,
                 description: description(codemode: false),
@@ -330,7 +336,7 @@ extension CoreTool {
                             page: page
                         )
                     } catch CoreToolOutput.ReadFilesystem.ReadError.notFound {
-                        if let alternate = await alternatePath(for: requested, localID: env.environment.id) {
+                        if let alternate = await alternatePath(for: requested) {
                             let recovered = try await env.fileAccess.authorizeRead(
                                 alternate,
                                 context: context,
@@ -347,7 +353,7 @@ extension CoreTool {
                             let suggestions = await suggestSimilarFiles(
                                 for: requested,
                                 inputPath: input.path,
-                                localID: env.environment.id
+                                workingDirectory: workingDirectory
                             )
                             let msg = suggestions.isEmpty
                                 ? "File not found: \(input.path)"
@@ -376,30 +382,13 @@ extension CoreTool {
                 switch readOutput {
                 case .text(let t):
                     isTruncated = t.next != nil
-                    var obj: [String: JSONValue] = [
-                        "type": .string("text"),
-                        "content": .string(t.content),
-                        "offset": .int(Int64(t.offset)),
-                        "lineCount": .int(Int64(t.lineCount)),
-                    ]
-                    if let next = t.next { obj["next"] = .int(Int64(next)) }
-                    structured = .object(obj)
+                    structured = encodeToolJSON(t)
                 case .directory(let d):
                     isTruncated = d.next != nil
-                    var obj: [String: JSONValue] = [
-                        "type": .string("directory"),
-                        "entries": .array(d.entries.map { .string($0) }),
-                    ]
-                    if let next = d.next { obj["next"] = .int(Int64(next)) }
-                    structured = .object(obj)
+                    structured = encodeToolJSON(d)
                 case .media(let m):
                     isTruncated = false
-                    structured = .object([
-                        "type": .string("media"),
-                        "uri": .string(m.uri),
-                        "mime": .string(m.mime),
-                        "name": .string(m.name),
-                    ])
+                    structured = encodeToolJSON(m.content)
                 }
 
                 return ToolSchema.Result(
@@ -426,31 +415,26 @@ extension CoreTool {
         }
 
         private static func alternatePath(
-            for target: CoreFilesystem.FileAccess.Target,
-            localID: CoreLocation.Environment.ID
+            for target: CoreFilesystem.FileAccess.Target
         ) async -> String? {
-            let remote = target.environment.id != localID
-            let folder = remote
-                ? CoreFilesystem.FileAccess.posixDirname(target.absolute.rawValue)
-                : CoreConfigDiscovery.dirname(target.absolute.rawValue)
+            // The path follows its environment's rules, whatever this server's platform joins with.
+            let rules = target.environment.path ?? CoreLocation.Environment.PathRules.host
+            let folder = rules.dirname(target.absolute.rawValue)
             guard let entries = try? await target.environment.files.list(folder) else { return nil }
             let base = canonicalFilename(CoreConfigDiscovery.basename(target.absolute.rawValue))
             let matches = entries.filter { $0.type == .file && canonicalFilename($0.name) == base }
             guard matches.count == 1 else { return nil }
-            return remote
-                ? CoreFilesystem.FileAccess.posixJoin(folder, matches[0].name)
-                : CoreConfigDiscovery.joinPath(folder, matches[0].name)
+            return rules.join(folder, matches[0].name)
         }
 
         private static func suggestSimilarFiles(
             for target: CoreFilesystem.FileAccess.Target,
             inputPath: String,
-            localID: CoreLocation.Environment.ID
+            workingDirectory: CoreLocation.Environment.WorkingDirectory
         ) async -> [String] {
-            let remote = target.environment.id != localID
-            let folder = remote
-                ? CoreFilesystem.FileAccess.posixDirname(target.absolute.rawValue)
-                : CoreConfigDiscovery.dirname(target.absolute.rawValue)
+            _ = workingDirectory
+            let rules = target.environment.path ?? CoreLocation.Environment.PathRules.host
+            let folder = rules.dirname(target.absolute.rawValue)
             guard let entries = try? await target.environment.files.list(folder) else { return [] }
             let names = entries.map(\.name)
             let requestedRaw = CoreConfigDiscovery.basename(inputPath)
@@ -1213,7 +1197,7 @@ extension CoreTool {
             return lines.joined(separator: "\n")
         }
 
-        // parity: core/src/tool/plugin/glob.ts#Plugin [status=adapted hash=15a88bf8fa14]
+        // parity: core/src/tool/plugin/glob.ts#Plugin [status=adapted hash=03816c835ab4]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.glob") { editor, env in
             // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode.
             editor.add(RegisteredTool(
@@ -1233,9 +1217,7 @@ extension CoreTool {
                 } catch {
                     throw Runtime.toolFailure("Unable to find files matching \(input.pattern)")(error)
                 }
-                if target.environment.id != env.environment.id {
-                    throw AISchema.ToolFailure(message: "Search is not available on \(target.environment.id.rawValue) yet.")
-                }
+                try CoreToolOutput.Search.available(target.environment)
                 try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
                 let inv = CorePermission.invocation(context)
                 try await env.permission.assert(CorePermission.AssertInput(
@@ -1247,8 +1229,9 @@ extension CoreTool {
                     metadata: ["root": .string(searchPath ?? ".")],
                     source: inv.source
                 ))
+                let targetDisk = CoreFilesystem.FileMutation.fileSystem(for: target.environment, local: env.fileSystem)
                 let pathKind = try await CoreToolOutput.Search.pathType(
-                    fileSystem: env.fileSystem,
+                    fileSystem: targetDisk,
                     absolute: target.absolute.rawValue,
                     display: searchPath ?? "."
                 )
@@ -1260,6 +1243,7 @@ extension CoreTool {
                 do {
                     bounded = try await CoreToolOutput.Search.bounded(limit: maxResults) { lim in
                         try await env.ripgrep.glob(CoreRipgrep.GlobInput(
+                            environment: target.environment,
                             cwd: target.absolute.rawValue,
                             pattern: input.pattern,
                             limit: lim,
@@ -1361,7 +1345,7 @@ extension CoreTool {
             return lines.joined(separator: "\n")
         }
 
-        // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=4a7c569308c7]
+        // parity: core/src/tool/plugin/grep.ts#Plugin [status=adapted hash=29a76fa6cc3f]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.grep") { editor, env in
             // Registered whatever full_codemode says; `ModelPolicy.modelTools` hides it under full Code Mode.
             editor.add(RegisteredTool(
@@ -1383,9 +1367,7 @@ extension CoreTool {
                 } catch {
                     throw Runtime.toolFailure("Unable to grep for \(input.pattern)")(error)
                 }
-                if target.environment.id != env.environment.id {
-                    throw AISchema.ToolFailure(message: "Search is not available on \(target.environment.id.rawValue) yet.")
-                }
+                try CoreToolOutput.Search.available(target.environment)
                 try await env.fileAccess.authorizeExternal([target], context: context, metadata: nil)
                 let inv = CorePermission.invocation(context)
                 try await env.permission.assert(CorePermission.AssertInput(
@@ -1397,8 +1379,9 @@ extension CoreTool {
                     metadata: ["root": .string(".")],
                     source: inv.source
                 ))
+                let targetDisk = CoreFilesystem.FileMutation.fileSystem(for: target.environment, local: env.fileSystem)
                 let kind = try await CoreToolOutput.Search.pathType(
-                    fileSystem: env.fileSystem,
+                    fileSystem: targetDisk,
                     absolute: target.absolute.rawValue,
                     display: input.path ?? "."
                 )
@@ -1410,6 +1393,7 @@ extension CoreTool {
                 do {
                     bounded = try await CoreToolOutput.Search.bounded(limit: maxResults) { lim in
                         try await env.ripgrep.grep(CoreRipgrep.GrepInput(
+                            environment: target.environment,
                             cwd: cwd,
                             pattern: input.pattern,
                             file: singleFile,
@@ -1594,8 +1578,69 @@ extension CoreTool {
             await onCompleted(payload)
         }
 
-        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=886a8bba5686]
+        /// Structured shell output ordered so metadata (`shellID`, `exitCode`, `signal`, `killed`, `outputPath`, `pid`,
+        /// `wallTimeSeconds`) precedes `output` and survives truncation at the tool output limit.
+        public struct StructuredOutput: Equatable, Hashable, Sendable, Codable {
+            public let shellID: String?
+            public let exitCode: Double?
+            public let signal: String?
+            public let killed: String?
+            public let outputPath: String?
+            public let pid: Int?
+            public let wallTimeSeconds: Double
+            public let output: String
+
+            public init(
+                shellID: String? = nil,
+                exitCode: Double? = nil,
+                signal: String? = nil,
+                killed: String? = nil,
+                outputPath: String? = nil,
+                pid: Int? = nil,
+                wallTimeSeconds: Double,
+                output: String
+            ) {
+                self.shellID = shellID
+                self.exitCode = exitCode
+                self.signal = signal
+                self.killed = killed
+                self.outputPath = outputPath
+                self.pid = pid
+                self.wallTimeSeconds = wallTimeSeconds
+                self.output = output
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case shellID
+                case exitCode
+                case signal
+                case killed
+                case outputPath
+                case pid
+                case wallTimeSeconds
+                case output
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(shellID, forKey: .shellID)
+                if let exitCode {
+                    try container.encode(exitCode, forKey: .exitCode)
+                } else {
+                    try container.encodeNil(forKey: .exitCode)
+                }
+                try container.encodeIfPresent(signal, forKey: .signal)
+                try container.encodeIfPresent(killed, forKey: .killed)
+                try container.encodeIfPresent(outputPath, forKey: .outputPath)
+                try container.encodeIfPresent(pid, forKey: .pid)
+                try container.encode(wallTimeSeconds, forKey: .wallTimeSeconds)
+                try container.encode(output, forKey: .output)
+            }
+        }
+
+        // parity: core/src/tool/plugin/shell.ts#Plugin [status=adapted hash=a9de51864df3]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tool.shell") { editor, env in
+            let workingDirectory = env.workingDirectory
             // With full_codemode, shell is allowed in Code Mode and pinned so the catalog always lists it.
             editor.add(RegisteredTool(
                 name: name,
@@ -1604,17 +1649,17 @@ extension CoreTool {
                 outputSchema: [
                     "type": .string("object"),
                     "properties": .object([
-                        "output": .object(["type": .string("string")]),
+                        "shellID": .object(["type": .string("string")]),
                         "exitCode": .object(["type": .array([.string("number"), .string("null")])]),
                         "signal": .object(["type": .string("string")]),
-                        "outputPath": .object(["type": .string("string")]),
-                        "shellID": .object(["type": .string("string")]),
-                        "pid": .object(["type": .string("integer")]),
                         "killed": .object([
                             "type": .string("string"),
                             "description": .string("Why the command ended without an exit code, when the reason is known: the machine's worker restarted or lost the process, or the local process daemon stopped"),
                         ]),
+                        "outputPath": .object(["type": .string("string")]),
+                        "pid": .object(["type": .string("integer")]),
                         "wallTimeSeconds": .object(["type": .string("number")]),
+                        "output": .object(["type": .string("string")]),
                     ]),
                 ],
                 options: env.fullCodeMode ? ToolSchema.Options(codemode: true, pinned: true) : ToolSchema.Options(codemode: false),
@@ -1631,8 +1676,8 @@ extension CoreTool {
                     ? input.timeout!
                     : (Runtime.inCodeMode ? CODE_MODE_TIMEOUT_MS : DEFAULT_TIMEOUT_MS)
                 let timeoutMs = background ? (input.timeout ?? 0) : foreground
-                // The same default `Shell.create` gives the hooks, so the hook can tell whether one moved it.
-                let cwd = input.workdir ?? env.directory
+                // The same default `Shell.create` gives the hooks, so `prepare` can tell whether one moved it.
+                let cwd = input.workdir ?? workingDirectory.absolute.rawValue
                 let info: ShellSchema.Info
                 do {
                     let initialTarget = try await env.fileAccess.resolve(
@@ -1658,8 +1703,8 @@ extension CoreTool {
                         if invocation.cwd == cwd {
                             target = initialTarget
                         } else {
-                            let base = initialTarget.environment.id == env.environment.id
-                                ? CoreFilesystem.FileAccess.Place(absolute: env.directory, environment: env.environment.id)
+                            let base = initialTarget.environment.id == workingDirectory.environment.id
+                                ? workingDirectory.place
                                 : initialTarget.place
                             target = try await env.fileAccess.resolve(
                                 CoreFilesystem.FileAccess.ResolveInput(path: invocation.cwd, kind: .directory, base: base)
@@ -1677,7 +1722,27 @@ extension CoreTool {
                                 command: invocation.command,
                                 program: invocation.shell,
                                 target: target,
-                                local: target.environment.id == env.environment.id
+                                rules: {
+                                    let rawSessionPermissions: SessionSchema.PermissionRuleset?
+                                    if let session = env.session, let info = try? session.get(context.sessionID) {
+                                        rawSessionPermissions = info.permissions
+                                    } else if let store = env.sessionStore, let info = try? store.get(context.sessionID) {
+                                        rawSessionPermissions = info.permissions
+                                    } else {
+                                        rawSessionPermissions = nil
+                                    }
+                                    let sessionPermissions: CorePermission.Ruleset = (rawSessionPermissions ?? []).compactMap { rule in
+                                        guard let effect = PermissionSchema.Effect(rawValue: rule.effect.rawValue) else { return nil }
+                                        return PermissionSchema.Rule(action: rule.action, resource: rule.resource, effect: effect)
+                                    }
+                                    let agentPermissions: CorePermission.Ruleset
+                                    if let agentSvc = env.agent, let agent = await agentSvc.resolve(context.agent.rawValue) {
+                                        agentPermissions = agent.permissions
+                                    } else {
+                                        agentPermissions = []
+                                    }
+                                    return CorePermission.merge(agentPermissions, sessionPermissions)
+                                }
                             )
                         )
                         let inv = CorePermission.invocation(context)
@@ -1688,6 +1753,7 @@ extension CoreTool {
                                 action: request.action,
                                 resources: request.resources,
                                 save: request.save,
+                                metadata: request.metadata,
                                 source: inv.source
                             ))
                         }
@@ -1710,6 +1776,12 @@ extension CoreTool {
                     }
                 } catch let err as CorePermission.DeclinedError {
                     throw err
+                } catch let err as CorePermission.BlockedError {
+                    throw AISchema.ToolFailure(message: err.message, error: .string(err.message), cause: err)
+                } catch let err as CorePermission.CorrectedError {
+                    throw AISchema.ToolFailure(message: err.feedback, error: .string(err.feedback), cause: err)
+                } catch let err as CoreShellPermissions.UnverifiableError {
+                    throw AISchema.ToolFailure(message: err.message, error: .string(err.message), cause: err)
                 } catch let err as AISchema.ToolFailure {
                     throw err
                 } catch {
@@ -1726,14 +1798,16 @@ extension CoreTool {
                 let summary = CoreShell.ResultHelper.output(res)
                 let endMs = res.info.time.completed ?? Double(Flock.currentEpochMs())
                 let wall = max(0, endMs - res.info.time.started) / 1_000.0
-                var outObj: [String: JSONValue] = [
-                    "output": .string(summary.output),
-                    "exitCode": summary.exit.map { .double($0) } ?? .null,
-                    "wallTimeSeconds": .double(wall),
-                ]
-                if let sig = summary.signal { outObj["signal"] = .string(sig) }
-                if let killed = summary.killed { outObj["killed"] = .string(killed) }
-                if summary.truncated { outObj["outputPath"] = .string(res.info.file) }
+                let structured = StructuredOutput(
+                    shellID: nil,
+                    exitCode: summary.exit,
+                    signal: summary.signal,
+                    killed: summary.killed,
+                    outputPath: summary.truncated ? res.info.file : nil,
+                    pid: nil,
+                    wallTimeSeconds: wall,
+                    output: summary.output
+                )
 
                 var messages: [ToolSchema.Content] = []
                 if !summary.output.isEmpty {
@@ -1745,7 +1819,7 @@ extension CoreTool {
                 var meta = CoreShell.ResultHelper.metadata(summary)
                 meta["status"] = .string("completed")
                 return ToolSchema.Result(
-                    output: .object(outObj),
+                    output: encodeToolJSON(structured),
                     content: .parts(messages),
                     metadata: meta
                 )
