@@ -1906,7 +1906,11 @@ public final class ServerAppRuntime: Sendable {
                 http: capturedHttp,
                 environment: capturedEnv
             )
-            let voiceService = CoreIntegration.Voice.Service(integrations: integrationService)
+            let voiceService = CoreIntegration.Voice.Service(
+                integrations: integrationService,
+                modelsDev: modelsDev,
+                http: capturedHttp
+            )
             let artifactService = CoreArtifact.Service(
                 directory: dirPath,
                 projectID: resolvedProject.id,

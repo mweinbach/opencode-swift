@@ -7273,15 +7273,26 @@ public enum CoreIntegration {
     // MARK: - core/src/voice.ts
 
     public enum Voice {
-        // parity: core/src/voice.ts#ModelInfo [status=implemented hash=d3cffec903af]
+        // parity: core/src/voice.ts#ModelInfo [status=implemented hash=0b2a5939bdeb]
         public struct ModelInfo: Equatable, Hashable, Sendable, Codable {
             public let model: String
+            public let name: String
+            public let engine: String
             public let provider: String
             public let transports: [String]
             public let available: Bool
 
-            public init(model: String, provider: String, transports: [String], available: Bool) {
+            public init(
+                model: String,
+                name: String,
+                engine: String,
+                provider: String,
+                transports: [String],
+                available: Bool
+            ) {
                 self.model = model
+                self.name = name
+                self.engine = engine
                 self.provider = provider
                 self.transports = transports
                 self.available = available
@@ -7355,6 +7366,7 @@ public enum CoreIntegration {
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/Voice"
             private let integrations: any Integration.Interface
+            private let modelsDev: any CoreModel.ModelsDev.Interface
             private let executor: AIRequestExecutor.RequestExecutorService
 
             private static let openCodeLiveProvider = "opencode"
@@ -7371,10 +7383,14 @@ public enum CoreIntegration {
 
             public init(
                 integrations: any Integration.Interface,
+                modelsDev: (any CoreModel.ModelsDev.Interface)? = nil,
                 executor: AIRequestExecutor.RequestExecutorService? = nil,
                 http: any HTTPTransport = URLSessionHTTPTransport.shared
             ) {
                 self.integrations = integrations
+                self.modelsDev = modelsDev ?? CoreModel.ModelsDev.StaticService(
+                    snapshots: CoreModel.ModelsDev.defaultBundledVoiceSnapshots()
+                )
                 self.executor = executor ?? AIRequestExecutor.layer(transport: http)
             }
 
@@ -7392,7 +7408,7 @@ public enum CoreIntegration {
             }
 
             private func resolveSource(
-                for engine: AIExperimental.RealtimeEngineSpec
+                for engine: AIExperimental.RealtimeEngine
             ) async -> (provider: String, connection: ConnectionSchema.Info)? {
                 if let direct = await findConnection(provider: engine.provider, methods: [.key]) {
                     return (engine.provider, direct)
@@ -7402,6 +7418,40 @@ public enum CoreIntegration {
                     return (Self.openCodeLiveProvider, hosted)
                 }
                 return nil
+            }
+
+            private struct OfferedVoice {
+                let engine: AIExperimental.RealtimeEngine
+                let found: (provider: String, connection: ConnectionSchema.Info)?
+                let info: ModelInfo
+            }
+
+            /// Each engine's models.dev voice models from the provider that would start them, newest first.
+            private func offered() async throws -> [OfferedVoice] {
+                let catalog = try await modelsDev.get()
+                var out: [OfferedVoice] = []
+                for engine in AIExperimental.Realtime.engines {
+                    let found = await resolveSource(for: engine)
+                    let provider = found?.provider ?? engine.provider
+                    let voices = (catalog.first { $0.info.id.rawValue == provider }?.voices ?? [])
+                        .filter { $0.api == engine.api }
+                        .sorted { $0.releaseDate > $1.releaseDate }
+                    for voice in voices {
+                        out.append(OfferedVoice(
+                            engine: engine,
+                            found: found,
+                            info: ModelInfo(
+                                model: voice.id,
+                                name: voice.name,
+                                engine: engine.id,
+                                provider: provider,
+                                transports: engine.transports.map(\.rawValue),
+                                available: found != nil
+                            )
+                        ))
+                    }
+                }
+                return out
             }
 
             private struct SessionAccess {
@@ -7438,25 +7488,21 @@ public enum CoreIntegration {
             }
 
             public func models() async throws -> Models {
-                var list: [ModelInfo] = []
-                for engine in AIExperimental.Realtime.engines {
-                    let found = await resolveSource(for: engine)
-                    list.append(ModelInfo(
-                        model: engine.model,
-                        provider: found?.provider ?? engine.provider,
-                        transports: engine.transports.map(\.rawValue),
-                        available: found != nil
-                    ))
-                }
+                let list = try await offered().map(\.info)
                 let def = list.first(where: \.available)?.model
                 return Models(models: list, defaultModel: def)
             }
 
             public func session(_ input: SessionInput) async throws -> [String: JSONValue] {
-                guard let engine = AIExperimental.Realtime.engine(input.model) else {
-                    throw InvalidRequestError(message: "Unsupported voice model: \(input.model)")
+                let list = try await offered()
+                guard let offer = list.first(where: { $0.info.model == input.model }) else {
+                    let listed = list.map(\.info.model).joined(separator: ", ")
+                    throw InvalidRequestError(
+                        message: "Unsupported voice model: \(input.model). This server lists \(listed.isEmpty ? "none" : listed)."
+                    )
                 }
-                let found = await resolveSource(for: engine)
+                let engine = offer.engine
+                let found = offer.found
                 let credential: CredentialSchema.Value?
                 if let found {
                     do {
@@ -7489,6 +7535,7 @@ public enum CoreIntegration {
                 do {
                     let connected = try await AIExperimental.Realtime.connect(
                         AIExperimental.RealtimeConnectInput(
+                            engine: engine,
                             model: input.model,
                             apiKey: access.apiKey,
                             baseURL: access.baseURL,
@@ -7529,16 +7576,30 @@ public enum CoreIntegration {
             }
         }
 
-        // parity: core/src/voice.ts#layer [status=implemented hash=cd2ec6388e2b]
+        // parity: core/src/voice.ts#layer [status=implemented hash=a4d37a71009f]
         public static let layer: LayerNode.ExecutableLayer = LayerNode.ExecutableLayer { deps, _ in
             let integrations = try deps.get(Integration.Service.serviceKey, as: Integration.Service.self)
                 ?? Integration.Service(credentials: CoreProvider.Credential.Service.inMemory())
+            let modelsDev: (any CoreModel.ModelsDev.Interface)? =
+                deps.get(CoreModel.ModelsDev.Service.serviceKey, as: (any CoreModel.ModelsDev.Interface).self)
+                ?? deps.get(CoreModel.ModelsDev.Service.serviceKey, as: CoreModel.ModelsDev.Service.self)
             let executor = deps.get(CoreSubsystems.Effect.AppNodePlatform.requestExecutorKey, as: AIRequestExecutor.RequestExecutorService.self)
             let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self) ?? URLSessionHTTPTransport.shared
-            return LayerNode.Output([Service.serviceKey: Service(integrations: integrations, executor: executor, http: http)])
+            return LayerNode.Output([
+                Service.serviceKey: Service(
+                    integrations: integrations,
+                    modelsDev: modelsDev,
+                    executor: executor,
+                    http: http
+                ),
+            ])
         }
 
-        // parity: core/src/voice.ts#node [status=implemented hash=3942889b1907]
-        public static let node: LayerNode.Provider = AppNode.makeLocationNode(Service.serviceKey, layer, [Integration.node])
+        // parity: core/src/voice.ts#node [status=implemented hash=9d3bece6505e]
+        public static let node: LayerNode.Provider = AppNode.makeLocationNode(
+            Service.serviceKey,
+            layer,
+            [Integration.node, CoreModel.ModelsDev.node, CoreSubsystems.Effect.AppNodePlatform.requestExecutor]
+        )
     }
 }

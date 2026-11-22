@@ -404,4 +404,55 @@ struct UpstreamSyncComponentsTests {
         #expect(links.linkSpans([MarkdownInlineSpan(text: id)], cell) == [MarkdownInlineSpan(text: id)])
         #expect(links.inlineHookFilter == ["ses_"])
     }
+
+    @Test("integrationOptions and visibleProviderIntegrations hide OpenCode Go until a Go credential is saved")
+    func integrationOptionsHidesOpenCodeGoWithoutSavedCredential() {
+        let withSavedGo = TUIComponent.integrationOptions([
+            TUIComponent.IntegrationItem(id: "mistral", name: "Mistral"),
+            TUIComponent.IntegrationItem(id: "openai", name: "OpenAI"),
+            TUIComponent.IntegrationItem(id: "custom-z", name: "Zebra"),
+            TUIComponent.IntegrationItem(id: "anthropic", name: "Anthropic"),
+            TUIComponent.IntegrationItem(id: "opencode", name: "OpenCode"),
+            TUIComponent.IntegrationItem(
+                id: "opencode-go",
+                name: "OpenCode Go",
+                connections: [TUIComponent.IntegrationConnectionSummary(type: "credential", label: "Go")]
+            ),
+        ])
+        #expect(withSavedGo.map(\.id) == ["opencode", "opencode-go", "openai", "anthropic", "mistral", "custom-z"])
+
+        let envOnlyGo = TUIComponent.integrationOptions([
+            TUIComponent.IntegrationItem(id: "opencode", name: "OpenCode"),
+            TUIComponent.IntegrationItem(
+                id: "opencode-go",
+                name: "OpenCode Go",
+                connections: [TUIComponent.IntegrationConnectionSummary(type: "env", label: "OPENCODE_API_KEY", name: "OPENCODE_API_KEY")]
+            ),
+        ])
+        #expect(envOnlyGo.map(\.id) == ["opencode"])
+
+        let state = TUIInteractiveState(
+            integrations: [
+                TUIIntegrationItem(id: "opencode", name: "OpenCode"),
+                TUIIntegrationItem(
+                    id: "opencode-go",
+                    name: "OpenCode Go",
+                    connections: [.env(name: "OPENCODE_API_KEY", statusMessage: nil)]
+                ),
+            ]
+        )
+        #expect(state.visibleProviderIntegrations.map(\.id) == ["opencode"])
+
+        let stateWithCred = TUIInteractiveState(
+            integrations: [
+                TUIIntegrationItem(id: "opencode", name: "OpenCode"),
+                TUIIntegrationItem(
+                    id: "opencode-go",
+                    name: "OpenCode Go",
+                    connections: [.credential(id: "go", label: "Go", method: "key", statusMessage: nil)]
+                ),
+            ]
+        )
+        #expect(stateWithCred.visibleProviderIntegrations.map(\.id) == ["opencode", "opencode-go"])
+    }
 }

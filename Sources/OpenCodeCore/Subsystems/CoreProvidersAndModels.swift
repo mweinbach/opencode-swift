@@ -3692,15 +3692,38 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/models-dev.ts#Snapshot [status=implemented hash=6b5ddd97a912]
+        /// A realtime model that answers in speech and calls tools, by the API it speaks (`live`, `realtime`…).
+        // parity: core/src/models-dev.ts#VoiceModel [status=implemented hash=f8e0444911be]
+        public struct VoiceModel: Equatable, Hashable, Sendable, Codable {
+            public let id: String
+            public let name: String
+            public let api: String
+            public let releaseDate: String
+
+            public init(id: String, name: String, api: String, releaseDate: String) {
+                self.id = id
+                self.name = name
+                self.api = api
+                self.releaseDate = releaseDate
+            }
+        }
+
+        // parity: core/src/models-dev.ts#Snapshot [status=implemented hash=e38618f3751f]
         public struct Snapshot: Equatable, Sendable {
             public let info: ProviderSchema.Info
             public let models: [ModelSchema.Info]
+            public let voices: [VoiceModel]?
             public let environment: [String]
 
-            public init(info: ProviderSchema.Info, models: [ModelSchema.Info], environment: [String]) {
+            public init(
+                info: ProviderSchema.Info,
+                models: [ModelSchema.Info],
+                voices: [VoiceModel]? = nil,
+                environment: [String]
+            ) {
                 self.info = info
                 self.models = models
+                self.voices = voices
                 self.environment = environment
             }
         }
@@ -3718,7 +3741,7 @@ public enum CoreModel {
         }
 
         // parity: core/src/models-dev.ts#catalogPath [status=implemented hash=e92527d3d949]
-        public static let catalogPath = "/experimental/v2.0/api.json?type=chat,decision,image,video"
+        public static let catalogPath = "/experimental/v2.0/api.json?type=chat,decision,image,video,realtime"
 
         // parity: core/src/models-dev.ts#bodyDigest [status=implemented hash=4278a18c1470]
         public static func bodyDigest(_ text: String) -> String {
@@ -3765,11 +3788,11 @@ public enum CoreModel {
                             && !(snap.info.id == .amazonBedrock && bedrockProfileOnlyIDs.contains(effectiveID))
                     }
                     guard !filteredModels.isEmpty else { return nil }
-                    return Snapshot(info: snap.info, models: filteredModels, environment: snap.environment)
+                    return Snapshot(info: snap.info, models: filteredModels, voices: snap.voices, environment: snap.environment)
                 }
         }
 
-        private static let supportedModelTypes: Set<String> = ["chat", "decision", "image", "video"]
+        private static let supportedModelTypes: Set<String> = ["chat", "decision", "image", "video", "realtime"]
 
         private static let compatiblePackages: Set<String> = [
             "@opencode/ai/providers/openai-compatible",
@@ -4186,6 +4209,7 @@ public enum CoreModel {
                 // Pass 1: route every model in source order and compute provider-level defaults.
                 var routed: [RoutedSource] = []
                 routed.reserveCapacity(rawModels.count)
+                var voices: [VoiceModel] = []
                 var pkgCounts: [String: Int] = [:]
                 var pkgOrder: [String] = []
                 var urlCounts: [String: Int] = [:]
@@ -4198,6 +4222,43 @@ public enum CoreModel {
                           let mname = stringField(m, "name")
                     else { continue }
                     let modelTypeStr = stringField(m, "type") ?? "chat"
+                    // Translation and streaming models are realtime too, but don't answer in speech or call tools.
+                    if modelTypeStr == "realtime" {
+                        let firstAPI: String? = {
+                            switch field(m, "api") {
+                            case .object(let apiPairs):
+                                return apiPairs.first?.0
+                            case .array(let apiList):
+                                return apiList.first?.objectValue.flatMap {
+                                    stringField($0, "protocol") ?? stringField($0, "id") ?? stringField($0, "type")
+                                }
+                            default:
+                                return nil
+                            }
+                        }()
+                        let speaks: Bool = {
+                            guard let modalitiesObj = objectField(m, "modalities"),
+                                  let outputs = arrayField(modalitiesObj, "output")
+                            else { return false }
+                            return outputs.contains { ($0.stringValue ?? "").hasPrefix("audio") }
+                        }()
+                        let toolsSupported: Bool = {
+                            guard let capsObj = objectField(m, "capabilities"),
+                                  let tools = objectField(capsObj, "tools"),
+                                  let supported = boolField(tools, "supported")
+                            else { return false }
+                            return supported
+                        }()
+                        let isDeprecated = stringField(m, "status") == "deprecated"
+                        if let api = firstAPI, !api.isEmpty, speaks, toolsSupported, !isDeprecated {
+                            voices.append(VoiceModel(
+                                id: mid,
+                                name: mname,
+                                api: api,
+                                releaseDate: stringField(m, "release_date") ?? ""
+                            ))
+                        }
+                    }
                     guard supportedModelTypes.contains(modelTypeStr) else { continue }
 
                     var apiEntries: [(protoKey: String, apiObj: [(String, OrderedJSON)])] = []
@@ -4487,6 +4548,7 @@ public enum CoreModel {
                 snapshots.append(Snapshot(
                     info: ProviderSchema.Info(id: pid, name: pname, activation: .auto, package: defaultPkg, settings: providerSettings),
                     models: builtModels,
+                    voices: voices.isEmpty ? nil : voices,
                     environment: env
                 ))
             }
@@ -4533,6 +4595,91 @@ public enum CoreModel {
             func refresh(force: Bool) async
         }
 
+        /// Static in-memory `ModelsDev.Interface` useful for deterministic tests and offline defaults.
+        public struct StaticService: Interface, Sendable {
+            public let snapshots: [Snapshot]
+
+            public init(snapshots: [Snapshot]) {
+                self.snapshots = snapshots
+            }
+
+            public func get(recommended: Bool) async throws -> [Snapshot] {
+                _ = recommended
+                return snapshots
+            }
+
+            public func refresh(force: Bool) async {
+                _ = force
+            }
+        }
+
+        /// Bundled voice-model catalog floor mirroring upstream `packages/core/src/models-dev/snapshot.txt`
+        /// for cold/offline boots when `options.snapshot != false`.
+        public static func defaultBundledVoiceSnapshots() -> [Snapshot] {
+            [
+                Snapshot(
+                    info: ProviderSchema.Info(
+                        id: .openai,
+                        name: "OpenAI",
+                        activation: .auto,
+                        package: "@opencode/ai/providers/openai"
+                    ),
+                    models: [],
+                    voices: [
+                        VoiceModel(id: "gpt-live-1.1", name: "GPT-Live 1.1", api: "live", releaseDate: "2026-11-19"),
+                        VoiceModel(id: "gpt-live-1", name: "GPT-Live 1", api: "live", releaseDate: "2026-09-10"),
+                        VoiceModel(id: "gpt-realtime-2.1", name: "GPT-Realtime-2.1", api: "realtime", releaseDate: "2026-07-06"),
+                        VoiceModel(id: "gpt-realtime-2.1-mini", name: "GPT-Realtime-2.1 Mini", api: "realtime", releaseDate: "2026-07-06"),
+                        VoiceModel(id: "gpt-realtime-2", name: "GPT-Realtime-2", api: "realtime", releaseDate: "2026-05-07"),
+                        VoiceModel(id: "gpt-realtime-1.5", name: "GPT-Realtime-1.5", api: "realtime", releaseDate: "2026-02-23"),
+                    ],
+                    environment: ["OPENAI_API_KEY"]
+                ),
+                Snapshot(
+                    info: ProviderSchema.Info(
+                        id: .opencode,
+                        name: "OpenCode",
+                        activation: .auto,
+                        package: "@opencode/ai/providers/openai-compatible"
+                    ),
+                    models: [],
+                    voices: [
+                        VoiceModel(id: "gpt-live-1", name: "GPT-Live 1", api: "live", releaseDate: "2026-09-10"),
+                    ],
+                    environment: ["OPENCODE_API_KEY"]
+                ),
+                Snapshot(
+                    info: ProviderSchema.Info(
+                        id: ProviderSchema.ID(rawValue: "xai"),
+                        name: "xAI",
+                        activation: .auto,
+                        package: "@opencode/ai/providers/xai"
+                    ),
+                    models: [],
+                    voices: [
+                        VoiceModel(id: "grok-voice-3.0", name: "Grok Voice 3.0", api: "realtime", releaseDate: "2026-10-14"),
+                    ],
+                    environment: ["XAI_API_KEY"]
+                ),
+                Snapshot(
+                    info: ProviderSchema.Info(
+                        id: .google,
+                        name: "Google",
+                        activation: .auto,
+                        package: "@opencode/ai/providers/google"
+                    ),
+                    models: [],
+                    voices: [
+                        VoiceModel(id: "gemini-3.8-live", name: "Gemini 3.8 Live", api: "bidi-generate-content", releaseDate: "2026-09-15"),
+                        VoiceModel(id: "gemini-3.8-live-extended-thinking", name: "Gemini 3.8 Live Extended Thinking", api: "bidi-generate-content", releaseDate: "2026-09-15"),
+                        VoiceModel(id: "gemini-3.1-flash-live-preview", name: "Gemini 3.1 Flash Live Preview", api: "bidi-generate-content", releaseDate: "2026-03-26"),
+                        VoiceModel(id: "gemini-2.5-flash-native-audio-preview-12-2025", name: "Gemini 2.5 Flash Native Audio Preview 12-2025", api: "bidi-generate-content", releaseDate: "2025-12-12"),
+                    ],
+                    environment: ["GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"]
+                ),
+            ]
+        }
+
         // parity: core/src/models-dev.ts#Service [status=implemented hash=e6f82121971f]
         public final class Service: Interface, Sendable {
             public static let serviceKey = "@opencode/ModelsDev"
@@ -4564,6 +4711,7 @@ public enum CoreModel {
                 var digest: String?
                 var etag: String?
                 var backgroundRefreshRunning: Bool = false
+                var didEvictLegacyKeys: Bool = false
             }
 
             private struct CacheMeta: Sendable {
@@ -4652,13 +4800,34 @@ public enum CoreModel {
                 options.fetch ?? true
             }
 
+            // Versioned so an entry cached for another catalog query is never read: v1 was the v1 API, v2 had no realtime models.
+            public static func cacheKey(for source: String) -> String {
+                if source == defaultSource { return "models-dev:v3:catalog" }
+                return "models-dev:v3:catalog:\(Hash.fast(source))"
+            }
+
             private var catalogKVKey: String {
-                if source == Self.defaultSource { return "models-dev:v2:catalog" }
-                return "models-dev:v2:catalog:\(Hash.fast(source))"
+                Self.cacheKey(for: source)
             }
 
             private var metaKVKey: String {
                 "\(catalogKVKey):meta"
+            }
+
+            /// Frees multi-MB KV rows cached under earlier key versions (`models-dev:` and `models-dev:v2:`).
+            public func evictLegacyCacheKeys() async {
+                let shouldRun = cacheState.withLock { s -> Bool in
+                    guard !s.didEvictLegacyKeys else { return false }
+                    s.didEvictLegacyKeys = true
+                    return true
+                }
+                guard shouldRun else { return }
+                let suffix = catalogKVKey.dropFirst("models-dev:v3:".count)
+                for prefix in ["models-dev:", "models-dev:v2:"] {
+                    let old = "\(prefix)\(suffix)"
+                    try? await kv.remove(old)
+                    try? await kv.remove("\(old):meta")
+                }
             }
 
             private func isStale(updatedAt: Int64?) -> Bool {
@@ -4737,7 +4906,7 @@ public enum CoreModel {
             }
 
             private func writeCache(text: String, updatedAt: Int64, digest: String, etag: String?) async {
-                // Best-effort KV write (matching upstream's exact `models-dev:v2:catalog` + `:meta` schema).
+                // Best-effort KV write (matching upstream's exact `models-dev:v3:catalog` + `:meta` schema).
                 try? await kv.set(catalogKVKey, value: .object([
                     "updatedAt": .int(updatedAt),
                     "digest": .string(digest),
@@ -4840,6 +5009,8 @@ public enum CoreModel {
             }
 
             private func getDefault() async throws -> [Snapshot] {
+                await evictLegacyCacheKeys()
+
                 // Explicit `options.file` takes precedence over KV/disk cache and network.
                 if let file = options.file {
                     if let cached = cacheState.withLock({ $0.snapshots }) {
@@ -4869,7 +5040,7 @@ public enum CoreModel {
                     return snapshots
                 }
 
-                // 2. SQLite KV cache (`models-dev:v2:catalog` + `:meta`) with SWR.
+                // 2. SQLite KV cache (`models-dev:v3:catalog` + `:meta`) with SWR.
                 if let kvHit = await loadFromKV() {
                     let meta = await loadMetaFromKV()
                     let effectiveUpdatedAt = max(kvHit.updatedAt, meta?.updatedAt ?? 0)
@@ -4914,12 +5085,20 @@ public enum CoreModel {
                 }
 
                 // 4. Cold start: no cached catalog available.
-                guard shouldFetch else { return [] }
-                await refresh(force: true)
-                return cacheState.withLock { $0.snapshots ?? [] }
+                if shouldFetch {
+                    await refresh(force: true)
+                    if let fetched = cacheState.withLock({ $0.snapshots }), !fetched.isEmpty {
+                        return fetched
+                    }
+                }
+                if options.file == nil && options.snapshot != false {
+                    return ModelsDev.defaultBundledVoiceSnapshots()
+                }
+                return []
             }
 
             public func refresh(force: Bool = false) async {
+                await evictLegacyCacheKeys()
                 await refreshLock.run { [self] in
                     await self.performRefresh(force: force)
                 }
@@ -5000,7 +5179,7 @@ public enum CoreModel {
             }
         }
 
-        // parity: core/src/models-dev.ts#layer [status=implemented hash=e716ba6ad344]
+        // parity: core/src/models-dev.ts#layer [status=implemented hash=e7093d8fff83]
         public static func layer(_ options: Options = Options()) -> LayerNode.ExecutableLayer {
             LayerNode.ExecutableLayer { deps, _ in
                 let http = deps.get(LayerNodePlatform.httpClientKey, as: (any HTTPTransport).self)
@@ -5010,14 +5189,16 @@ public enum CoreModel {
                 let fs = deps.get(LayerNodePlatform.fileSystemKey, as: (any OpenCodeFileSystem).self) ?? LocalFileSystem.shared
                 let kv = try deps.get(CoreKV.Service.serviceKey, as: CoreKV.Service.self) ?? CoreKV.Service.inMemory()
                 let bus = deps.get(CoreBus.Service.serviceKey, as: CoreBus.Service.self)
+                let service = Service(
+                    options: options,
+                    http: http,
+                    fileSystem: fs,
+                    kv: kv,
+                    bus: bus
+                )
+                await service.evictLegacyCacheKeys()
                 return LayerNode.Output([
-                    Service.serviceKey: Service(
-                        options: options,
-                        http: http,
-                        fileSystem: fs,
-                        kv: kv,
-                        bus: bus
-                    ),
+                    Service.serviceKey: service,
                 ])
             }
         }

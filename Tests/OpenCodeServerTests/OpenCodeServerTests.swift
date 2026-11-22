@@ -937,6 +937,7 @@ struct OpenCodeServerEndToEndTests {
         #expect(usage.data == nil)
         let voiceModels = try await harness.client.experimental.voice.models()
         #expect(!voiceModels.models.isEmpty)
+        #expect(voiceModels.models.allSatisfy { !$0.name.isEmpty && !$0.engine.isEmpty })
         let searchProviders = try await harness.client.websearch.providers()
         #expect(searchProviders.data.isEmpty)
     }

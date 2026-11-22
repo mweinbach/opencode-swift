@@ -377,7 +377,9 @@ enum CLITestFixtures {
                 methods: [
                     .oauth(IntegrationSchema.OAuthMethod(id: IntegrationMethodID(rawValue: "oauth"), label: "Sign in")),
                 ],
-                connections: []
+                connections: [
+                    .credential(ConnectionSchema.CredentialInfo(id: CredentialSchema.ID(rawValue: "go"), label: "Go", method: .key)),
+                ]
             ),
             IntegrationSchema.Info(
                 id: IntegrationID(rawValue: "mcp-linear"),

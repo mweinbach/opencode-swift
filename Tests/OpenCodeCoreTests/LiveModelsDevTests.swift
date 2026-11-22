@@ -271,13 +271,13 @@ struct LiveModelsDevTests {
 
     // MARK: - 2. SQLite KV Cache Parity (String Body & Object Body)
 
-    @Test("Reads upstream SQLite kv 'models-dev:v2:catalog' in both string-body and object-body formats without network calls")
+    @Test("Reads upstream SQLite kv 'models-dev:v3:catalog' in both string-body and object-body formats without network calls")
     func readsSQLiteKVCacheBothFormats() async throws {
         let clock = LiveModelsDevHelper.MutableClock(initialMs: 1_770_000_000_000)
 
         // Format A: `{ updatedAt, digest, body: <rawJSONString> }`
         let kvStringBody = try CoreKV.Service.inMemory()
-        try await kvStringBody.set("models-dev:v2:catalog", value: .object([
+        try await kvStringBody.set("models-dev:v3:catalog", value: .object([
             "updatedAt": .int(clock.nowMs() - 1_000),
             "digest": .string(CoreModel.ModelsDev.bodyDigest(LiveModelsDevHelper.sampleV2CatalogA)),
             "body": .string(LiveModelsDevHelper.sampleV2CatalogA),
@@ -299,7 +299,7 @@ struct LiveModelsDevTests {
         // Format B: `{ updatedAt, digest, body: <JSONObject> }`
         let kvObjectBody = try CoreKV.Service.inMemory()
         let parsedObj = try LiveModelsDevHelper.decodeJSONObject(LiveModelsDevHelper.sampleV2CatalogA)
-        try await kvObjectBody.set("models-dev:v2:catalog", value: .object([
+        try await kvObjectBody.set("models-dev:v3:catalog", value: .object([
             "updatedAt": .double(Double(clock.nowMs() - 2_000)),
             "digest": .string("precomputed-digest"),
             "body": .object(parsedObj),
@@ -369,14 +369,14 @@ struct LiveModelsDevTests {
         #expect(first.count == 2)
         #expect(transport.requests.count == 1)
         let req1 = try #require(transport.requests.first)
-        #expect(req1.url == "https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video")
+        #expect(req1.url == "https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video,realtime")
         #expect(LiveModelsDevHelper.headerValue(req1.headers, named: "user-agent") == "opencode/2.3.2")
         #expect(LiveModelsDevHelper.headerValue(req1.headers, named: "accept") == "application/json")
         #expect(LiveModelsDevHelper.headerValue(req1.headers, named: "if-none-match") == nil)
         #expect(refreshedEvents.withLock { $0 } == 1)
 
         // Verify SQLite KV catalog + meta rows
-        let storedCat = try #require(try await kv.get("models-dev:v2:catalog"))
+        let storedCat = try #require(try await kv.get("models-dev:v3:catalog"))
         if case .object(let catObj) = storedCat {
             #expect(catObj["updatedAt"] == .int(clock.nowMs()))
             #expect(catObj["digest"] == .string(CoreModel.ModelsDev.bodyDigest(LiveModelsDevHelper.sampleV2CatalogA)))
@@ -384,7 +384,7 @@ struct LiveModelsDevTests {
         } else {
             Issue.record("Expected KV catalog object")
         }
-        let storedMeta = try #require(try await kv.get("models-dev:v2:catalog:meta"))
+        let storedMeta = try #require(try await kv.get("models-dev:v3:catalog:meta"))
         if case .object(let metaObj) = storedMeta {
             #expect(metaObj["etag"] == .string("\"v1\""))
             #expect(metaObj["digest"] == .string(CoreModel.ModelsDev.bodyDigest(LiveModelsDevHelper.sampleV2CatalogA)))
@@ -480,7 +480,7 @@ struct LiveModelsDevTests {
             )
             let snaps = try await service.get()
             #expect(transport.requests.count == 2)
-            #expect(transport.requests[0].url == "https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video")
+            #expect(transport.requests[0].url == "https://models.opencode.ai/experimental/v2.0/api.json?type=chat,decision,image,video,realtime")
             #expect(transport.requests[1].url == "https://models.dev/api.json")
             #expect(snaps.count == 2)
 
@@ -546,7 +546,7 @@ struct LiveModelsDevTests {
         let memFS = LiveModelsDevHelper.InMemoryFileSystem(clock: { clock.nowMs() })
 
         // Pre-seed stale KV cache (10 minutes old)
-        try await kv.set("models-dev:v2:catalog", value: .object([
+        try await kv.set("models-dev:v3:catalog", value: .object([
             "updatedAt": .int(clock.nowMs() - 10 * 60_000),
             "digest": .string(CoreModel.ModelsDev.bodyDigest(LiveModelsDevHelper.sampleV2CatalogA)),
             "body": .string(LiveModelsDevHelper.sampleV2CatalogA),
@@ -605,7 +605,7 @@ struct LiveModelsDevTests {
         let memFS = LiveModelsDevHelper.InMemoryFileSystem(clock: { clock.nowMs() })
 
         // Seed corrupt KV entry and stale disk cache
-        try await kv.set("models-dev:v2:catalog", value: .object([
+        try await kv.set("models-dev:v3:catalog", value: .object([
             "updatedAt": .int(clock.nowMs()),
             "body": .string("{not-valid-json"),
         ]))
@@ -638,7 +638,7 @@ struct LiveModelsDevTests {
             (try? await service.get().map(\.info.id.rawValue)) == ["google"]
         }
         #expect(updated)
-        #expect(try await kv.get("models-dev:v2:catalog") != nil)
+        #expect(try await kv.get("models-dev:v3:catalog") != nil)
 
         // Custom mirror URL uses hashed KV key and falls back to `<mirror>/api.json`
         let mirrorKV = try CoreKV.Service.inMemory()
@@ -667,9 +667,107 @@ struct LiveModelsDevTests {
             "\(mirrorURL)\(CoreModel.ModelsDev.catalogPath)",
             "\(mirrorURL)/api.json",
         ])
-        let hashedKey = "models-dev:v2:catalog:\(Hash.fast(mirrorURL))"
+        let hashedKey = "models-dev:v3:catalog:\(Hash.fast(mirrorURL))"
         #expect(try await mirrorKV.get(hashedKey) != nil)
-        #expect(try await mirrorKV.get("models-dev:v2:catalog") == nil)
+        #expect(try await mirrorKV.get("models-dev:v3:catalog") == nil)
+    }
+
+    @Test("Keeps realtime models that answer in speech and call tools as voice models, not chat models")
+    func decodesRealtimeVoiceModelsOnlyWhenSpeechAndToolsSupported() throws {
+        let catalog = """
+        {
+          "acme": {
+            "id": "acme",
+            "name": "Acme",
+            "env": ["ACME_API_KEY"],
+            "models": {
+              "chat": {
+                "id": "chat",
+                "type": "chat",
+                "name": "Acme Chat",
+                "release_date": "2026-09-01",
+                "modalities": { "input": ["text"], "output": ["text"] },
+                "capabilities": { "tools": { "supported": true }, "reasoning": { "supported": false } },
+                "limit": { "context": 64000, "output": 8192 },
+                "api": { "chat-completions": { "base_url": "https://api.acme.test/v1", "sdk": { "opencodeai": "@opencode/ai/providers/openai-compatible" } } }
+              },
+              "voice": {
+                "id": "voice",
+                "type": "realtime",
+                "name": "Voice 1",
+                "release_date": "2026-09-10",
+                "modalities": { "input": ["audio/pcm"], "output": ["text", "audio/pcm"] },
+                "capabilities": { "tools": { "supported": true }, "reasoning": { "supported": false } },
+                "api": { "live": { "base_url": "https://api.acme.test/v1", "sdk": { "opencodeai": "none" } } }
+              },
+              "translate": {
+                "id": "translate",
+                "type": "realtime",
+                "name": "Translate",
+                "release_date": "2026-09-10",
+                "modalities": { "input": ["audio/pcm"], "output": ["text", "audio/pcm"] },
+                "capabilities": { "tools": { "supported": false }, "reasoning": { "supported": false } },
+                "api": { "live": { "base_url": "https://api.acme.test/v1", "sdk": { "opencodeai": "none" } } }
+              },
+              "streaming": {
+                "id": "streaming",
+                "type": "realtime",
+                "name": "Streaming",
+                "release_date": "2026-09-10",
+                "modalities": { "input": ["audio/pcm"], "output": ["text"] },
+                "capabilities": { "tools": { "supported": true }, "reasoning": { "supported": false } },
+                "api": { "live": { "base_url": "https://api.acme.test/v1", "sdk": { "opencodeai": "none" } } }
+              },
+              "retired": {
+                "id": "retired",
+                "type": "realtime",
+                "name": "Retired",
+                "status": "deprecated",
+                "release_date": "2025-09-10",
+                "modalities": { "input": ["audio/pcm"], "output": ["text", "audio/pcm"] },
+                "capabilities": { "tools": { "supported": true }, "reasoning": { "supported": false } },
+                "api": { "live": { "base_url": "https://api.acme.test/v1", "sdk": { "opencodeai": "none" } } }
+              }
+            }
+          }
+        }
+        """
+
+        let decoded = try CoreModel.ModelsDev.decodeSnapshot(catalog)
+        let acme = try #require(decoded.first { $0.info.id.rawValue == "acme" })
+        #expect(acme.models.map(\.id.rawValue) == ["chat"])
+        #expect(acme.voices == [
+            CoreModel.ModelsDev.VoiceModel(id: "voice", name: "Voice 1", api: "live", releaseDate: "2026-09-10"),
+        ])
+        let filtered = CoreModel.ModelsDev.filterSnapshots(decoded)
+        #expect(filtered.first?.voices == acme.voices)
+    }
+
+    @Test("Frees and ignores catalogs cached under earlier v1 and v2 KV keys")
+    func evictsLegacyV1AndV2KVCacheKeys() async throws {
+        let kv = try CoreKV.Service.inMemory()
+        for old in ["models-dev:catalog", "models-dev:v2:catalog"] {
+            try await kv.set(old, value: .object([
+                "updatedAt": .int(1_770_000_000_000),
+                "digest": .string("old"),
+                "body": .string("{}"),
+            ]))
+            try await kv.set("\(old):meta", value: .object([
+                "updatedAt": .int(1_770_000_000_000),
+                "digest": .string("old"),
+            ]))
+        }
+        let scope = LayerNode.ResourceScope()
+        let out = try await CoreModel.ModelsDev.layer(CoreModel.ModelsDev.Options(fetch: false)).build(
+            LayerNode.Output([CoreKV.Service.serviceKey: kv]),
+            scope
+        )
+        let service = try #require(out.get(CoreModel.ModelsDev.Service.serviceKey, as: CoreModel.ModelsDev.Service.self))
+        let snaps = try await service.get()
+        #expect(!snaps.isEmpty)
+        for old in ["models-dev:catalog", "models-dev:catalog:meta", "models-dev:v2:catalog", "models-dev:v2:catalog:meta"] {
+            #expect(try await kv.get(old) == nil)
+        }
     }
 
     // MARK: - 6. Credential SQLite Row Decoding Robustness

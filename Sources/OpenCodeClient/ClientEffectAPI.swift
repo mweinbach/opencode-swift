@@ -940,7 +940,7 @@ public enum EffectClient {
         public typealias ExperimentalGenerateDecisionsOperation = @Sendable (ExperimentalGenerateDecisionsInput) async throws -> ExperimentalGenerateDecisionsOutput
         // parity: client/src/effect/api/api.ts#ExperimentalGenerateApi [status=implemented hash=3dcd822261c8]
         public typealias ExperimentalGenerateApi = ExperimentalGenerateClientAPI
-        // parity: client/src/effect/api/api.ts#ExperimentalVoiceModelsOutput [status=implemented hash=17c2e3e0a0ff]
+        // parity: client/src/effect/api/api.ts#ExperimentalVoiceModelsOutput [status=implemented hash=c370c7651f39]
         public typealias ExperimentalVoiceModelsOutput = VoiceModelsData
         // parity: client/src/effect/api/api.ts#ExperimentalVoiceModelsOperation [status=implemented hash=8d57cba745cf]
         public typealias ExperimentalVoiceModelsOperation = @Sendable () async throws -> ExperimentalVoiceModelsOutput
