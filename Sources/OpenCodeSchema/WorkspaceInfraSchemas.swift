@@ -2946,8 +2946,8 @@ public enum AutomationSchema {
         }
     }
 
-    /// Automation request payload: prompt, Code Mode, or shell command action with schedule trigger.
-    // parity: schema/src/automation.ts#Request [status=implemented hash=d6ccf5c43bfb]
+    /// Automation request payload: prompt, Code Mode, or shell command action with schedule or MCP push event trigger.
+    // parity: schema/src/automation.ts#Request [status=implemented hash=4b57e59efaa8]
     public struct Request: Equatable, Hashable, Sendable, Codable {
         public let name: String
         public let trigger: Trigger

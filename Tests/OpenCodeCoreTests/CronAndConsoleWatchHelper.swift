@@ -250,7 +250,6 @@ enum CronAndConsoleWatchHelper {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     timezone: timezone,
                     projectID: owner.projectID,
                     agents: agents,

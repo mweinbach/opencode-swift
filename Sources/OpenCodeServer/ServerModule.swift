@@ -1639,24 +1639,22 @@ public final class ServerAppRuntime: Sendable {
             bus: bus,
             resolveLocation: { dir in
                 guard let locations = locationsBox.value else {
-                    return CoreAutomation.LocationContext(enabled: false, mcpEventsEnabled: false)
+                    return CoreAutomation.LocationContext(enabled: false)
                 }
                 let ref = CoreLocation.ServiceMap.canonical(
                     LocationSchema.Ref(directory: SchemaPrimitive.AbsolutePath(rawValue: dir))
                 )
                 let out = try await locations.get(ref)
                 guard let bundle = ServerLocationBundle.from(out) else {
-                    return CoreAutomation.LocationContext(enabled: false, mcpEventsEnabled: false)
+                    return CoreAutomation.LocationContext(enabled: false)
                 }
                 let entries = await bundle.config.entries()
                 let tz = entries.compactMap { $0.info?.timezone }.last
                 let depthLimit = entries.compactMap { $0.info?.experimental?.subagentDepth?.rawValue }.last ?? 1
                 let enabled = CoreConfig.latest(entries, \.automations) ?? true
-                let mcpEventsEnabled = await bundle.flag.enabled(.mcpEvents)
                 let fullCodeMode = await bundle.flag.enabled(.fullCodemode)
                 return CoreAutomation.LocationContext(
                     enabled: enabled,
-                    mcpEventsEnabled: mcpEventsEnabled,
                     timezone: tz,
                     projectID: bundle.location.info.project.id,
                     mcp: bundle.mcp,

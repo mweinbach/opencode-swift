@@ -42,22 +42,6 @@ public enum CoreShellPermissions {
             self.rules = rules
         }
 
-        /// Compatibility initializer for callers still passing `local:` while migrating to `rules:`.
-        public init(
-            command: String,
-            program: String,
-            target: CoreFilesystem.FileAccess.Target,
-            local: Bool,
-            once: Bool = false,
-            rules: @escaping @Sendable () async throws -> CorePermission.Ruleset = { [] }
-        ) {
-            _ = local
-            self.command = command
-            self.program = program
-            self.target = target
-            self.once = once
-            self.rules = rules
-        }
     }
 
     /// Scans `input.command` for external directories and shell subcommands and returns the ordered

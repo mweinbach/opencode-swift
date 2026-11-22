@@ -59,15 +59,38 @@ struct AutomationEventsAndWatchesTests {
             types
         }
 
+        func check(name: String, arguments: [String: JSONValue]?) async throws {
+            guard let match = types.first(where: { $0.name == name }), match.delivery.contains("push") else {
+                throw CoreMCP.Client.EventStreamRejectedError(
+                    server: "ci",
+                    code: -32023,
+                    message: "No push event type \(name) on MCP server ci"
+                )
+            }
+            guard let matcher = CoreMCP.Client.compileSchemaMatcher(match.inputSchema),
+                  matcher(.object(arguments ?? [:]))
+            else {
+                throw CoreMCP.Client.EventStreamRejectedError(
+                    server: "ci",
+                    code: -32602,
+                    message: "Arguments for \(name) do not match its inputSchema"
+                )
+            }
+        }
+
         func stream(
             name: String,
             arguments: [String: JSONValue]?,
-            cursor: String?
+            cursor: String?,
+            maxAgeMs: Int?
         ) async throws -> AsyncThrowingStream<CoreMCP.Client.EventMessage, Swift.Error> {
+            _ = maxAgeMs
+            try await check(name: name, arguments: arguments)
             let isAvail = state.withLock { $0.available }
             if !isAvail {
                 throw PlatformError.ioFailure("producer offline")
             }
+            let payloadMatcher = types.first(where: { $0.name == name }).flatMap { CoreMCP.Client.compileSchemaMatcher($0.payloadSchema) }
             return AsyncThrowingStream { continuation in
                 let streamID: Int = state.withLock { s in
                     let id = s.nextID
@@ -76,6 +99,7 @@ struct AutomationEventsAndWatchesTests {
                     s.continuations[id] = continuation
                     return id
                 }
+                _ = payloadMatcher
                 continuation.onTermination = { [weak self] _ in
                     self?.state.withLock { s in
                         if s.continuations.removeValue(forKey: streamID) != nil {
@@ -87,6 +111,14 @@ struct AutomationEventsAndWatchesTests {
         }
 
         func emit(_ streamID: Int, _ message: CoreMCP.Client.EventMessage) {
+            if case .event(_, let evName, _, let data, _) = message,
+               let match = types.first(where: { $0.name == evName }),
+               let matcher = CoreMCP.Client.compileSchemaMatcher(match.payloadSchema),
+               !matcher(.object(data))
+            {
+                // Upstream McpClient drops events whose data does not match payloadSchema.
+                return
+            }
             let cont = state.withLock { $0.continuations[streamID] }
             cont?.yield(message)
         }
@@ -201,7 +233,6 @@ struct AutomationEventsAndWatchesTests {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     projectID: owner.projectID,
                     mcp: mcp,
                     lifecycle: lifecycle,
@@ -353,7 +384,6 @@ struct AutomationEventsAndWatchesTests {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     projectID: owner.projectID,
                     agents: agents,
                     permission: permission,
@@ -392,7 +422,7 @@ struct AutomationEventsAndWatchesTests {
             eventId: "p1",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:00Z",
-            data: .object(["status": .string("pending")]),
+            data: ["status": .string("pending")],
             cursor: "p1"
         ))
         try await waitUntil { (try await svc.get(auto.id)).runCount.rawValue == 1 }
@@ -405,7 +435,7 @@ struct AutomationEventsAndWatchesTests {
             eventId: "t2",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:00Z",
-            data: .object(["status": .string("failure")]),
+            data: ["status": .string("failure")],
             cursor: "t2"
         ))
         try await waitUntil { (try await svc.get(auto.id)).status == .done && producer.cancelledIDs.contains(streamID) }
@@ -460,7 +490,6 @@ struct AutomationEventsAndWatchesTests {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     projectID: owner.projectID,
                     agents: agents,
                     permission: permission,
@@ -494,7 +523,7 @@ struct AutomationEventsAndWatchesTests {
             eventId: "p1",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:00Z",
-            data: .object(["status": .string("pending")]),
+            data: ["status": .string("pending")],
             cursor: "p1"
         ))
         try await waitUntil { (try await svc.get(auto.id)).runCount.rawValue == 1 }
@@ -508,7 +537,7 @@ struct AutomationEventsAndWatchesTests {
             eventId: "paused_ev",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:01Z",
-            data: .object(["status": .string("failure")]),
+            data: ["status": .string("failure")],
             cursor: "paused_ev"
         ))
         try await Task.sleep(for: .milliseconds(30))
@@ -568,7 +597,6 @@ struct AutomationEventsAndWatchesTests {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     projectID: owner.projectID,
                     agents: agents,
                     permission: permission,
@@ -633,7 +661,6 @@ struct AutomationEventsAndWatchesTests {
                 resolveLocation: { _ in
                     CoreAutomation.LocationContext(
                         enabled: true,
-                        mcpEventsEnabled: true,
                         projectID: owner.projectID,
                         agents: agents,
                         permission: permission,
@@ -681,7 +708,6 @@ struct AutomationEventsAndWatchesTests {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     projectID: owner.projectID,
                     agents: agents,
                     permission: permission,
@@ -989,7 +1015,6 @@ struct AutomationEventsAndWatchesTests {
                 resolveLocation: { _ in
                     CoreAutomation.LocationContext(
                         enabled: true,
-                        mcpEventsEnabled: true,
                         projectID: owner.projectID,
                         agents: agents,
                         permission: permission,
@@ -1035,7 +1060,7 @@ struct AutomationEventsAndWatchesTests {
             eventId: "c1",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:00Z",
-            data: .object(["status": .string("pending")]),
+            data: ["status": .string("pending")],
             cursor: "c1"
         ))
         try await waitUntil { (try await leaderSvc.get(auto.id)).runCount.rawValue == 1 }
@@ -1056,7 +1081,7 @@ struct AutomationEventsAndWatchesTests {
             eventId: "c2",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:01Z",
-            data: .object(["status": .string("success")]),
+            data: ["status": .string("success")],
             cursor: "c2"
         ))
         try await waitUntil { (try await followerSvc.get(auto.id)).runCount.rawValue == 2 }
@@ -1099,9 +1124,9 @@ struct AutomationEventsAndWatchesTests {
         #expect(thirdSvc.activeWatchIDs.isEmpty)
     }
 
-    // MARK: - 7. Failure & Disconnect Handling (malformed payload, no replay cursor, 3 reconnects)
+    // MARK: - 7. Failure & Reconnect Handling (inputSchema check, oversized event, terminated stream, continuous reopen)
 
-    @Test("Watch pauses on malformed payloadSchema, no replay cursor, and after 3 empty reconnects")
+    @Test("Watch validates args, drops non-matching events, pauses on oversized/terminated, and reopens continuously across disconnects")
     func watchFailureAndRetrySemantics() async throws {
         let harness = try await SessionDatabaseHelper.makeHarness()
         let clock = ClockBox()
@@ -1125,7 +1150,6 @@ struct AutomationEventsAndWatchesTests {
             resolveLocation: { _ in
                 CoreAutomation.LocationContext(
                     enabled: true,
-                    mcpEventsEnabled: true,
                     projectID: owner.projectID,
                     agents: agents,
                     permission: permission,
@@ -1137,7 +1161,7 @@ struct AutomationEventsAndWatchesTests {
         )
         let invocation = CoreAutomation.Author.Invocation(sessionID: owner.id, agent: CoreAgent.Agent.defaultID)
 
-        // Validation rejects wrong inputSchema arg & excess properties before creating.
+        // Validation rejects wrong inputSchema arg & excess properties before creating (via Event.check -> Events.check).
         await #expect(throws: CoreAutomation.InvalidError.self) {
             _ = try await svc.create(
                 AutomationSchema.CreateInput(
@@ -1168,11 +1192,11 @@ struct AutomationEventsAndWatchesTests {
         let runner = Task { await svc.run() }
         defer { runner.cancel() }
 
-        // 1) Malformed payload pauses immediately with payloadSchema message.
-        let malformed = try await svc.create(
+        // 1) Non-matching payload is dropped without pausing; oversized event (> 16 KiB) pauses with "Oversized MCP event".
+        let oversizedWatch = try await svc.create(
             AutomationSchema.CreateInput(
                 sessionID: owner.id,
-                name: "Malformed test",
+                name: "Oversized test",
                 trigger: .event(.init(server: "ci", event: "build.changed", args: ["build": .int(7)])),
                 action: .prompt(.init(prompt: "Check"))
             ),
@@ -1185,20 +1209,32 @@ struct AutomationEventsAndWatchesTests {
             eventId: "bad_1",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:00Z",
-            data: .object(["status": .int(42)]),
+            data: ["status": .int(42)],
             cursor: "bad_1"
         ))
-        try await waitUntil { (try await svc.get(malformed.id)).status == .paused }
-        let malformedInfo = try await svc.get(malformed.id)
-        #expect(malformedInfo.lastOutcome == .failed)
-        #expect(malformedInfo.lastOutput?.contains("payloadSchema") == true)
-        #expect(malformedInfo.runCount.rawValue == 0)
+        try await Task.sleep(for: .milliseconds(30))
+        #expect((try await svc.get(oversizedWatch.id)).status == .active)
+        #expect((try await svc.get(oversizedWatch.id)).runCount.rawValue == 0)
 
-        // 2) Three consecutive disconnects without confirmed output pauses the watch.
-        let flaky = try await svc.create(
+        let hugeStatus = String(repeating: "x", count: 17_000)
+        producer.emit(producer.openedStreams[0].id, .event(
+            eventId: "huge_1",
+            name: "build.changed",
+            timestamp: "2026-11-10T00:00:00Z",
+            data: ["status": .string(hugeStatus)],
+            cursor: "huge_1"
+        ))
+        try await waitUntil { (try await svc.get(oversizedWatch.id)).status == .paused }
+        let oversizedInfo = try await svc.get(oversizedWatch.id)
+        #expect(oversizedInfo.lastOutcome == .failed)
+        #expect(oversizedInfo.lastOutput?.contains("Oversized MCP event") == true)
+        #expect(oversizedInfo.runCount.rawValue == 0)
+
+        // 2) Continuous reopen across >3 disconnects from saved cursor, and immediate pause on terminated error.
+        let resilient = try await svc.create(
             AutomationSchema.CreateInput(
                 sessionID: owner.id,
-                name: "Flaky test",
+                name: "Resilient test",
                 trigger: .event(.init(server: "ci", event: "build.changed", args: ["build": .int(7)])),
                 action: .code(.init(code: "return { state: input.event.id }"))
             ),
@@ -1211,24 +1247,34 @@ struct AutomationEventsAndWatchesTests {
             eventId: "saved",
             name: "build.changed",
             timestamp: "2026-11-10T00:00:00Z",
-            data: .object(["status": .string("pending")]),
+            data: ["status": .string("pending")],
             cursor: "saved"
         ))
-        try await waitUntil { (try await svc.get(flaky.id)).runCount.rawValue == 1 }
+        try await waitUntil { (try await svc.get(resilient.id)).runCount.rawValue == 1 }
         producer.close(producer.openedStreams[1].id)
 
-        // Close 3 consecutive reconnected streams without emitting any confirmed message.
-        for attempt in 1...3 {
+        // Close 4 consecutive reconnected streams without emitting any confirmed message: watch keeps reopening!
+        for attempt in 1...4 {
             let expectedTotal = 2 + attempt
             try await waitUntil { producer.openedStreams.count >= expectedTotal }
             let reconnected = producer.openedStreams[expectedTotal - 1]
             #expect(reconnected.cursor == "saved")
             producer.close(reconnected.id)
         }
-        try await waitUntil { (try await svc.get(flaky.id)).status == .paused }
-        let flakyInfo = try await svc.get(flaky.id)
-        #expect(flakyInfo.runCount.rawValue == 1)
-        #expect(flakyInfo.lastOutcome == .failed)
+        try await waitUntil { producer.openedStreams.count >= 7 }
+        #expect((try await svc.get(resilient.id)).status == .active)
+
+        // Terminal server termination pauses the watch immediately without further reconnects.
+        let terminatedStreamID = producer.openedStreams[6].id
+        producer.close(
+            terminatedStreamID,
+            throwing: CoreMCP.Client.EventStreamTerminatedError(server: "ci", code: -32024, message: "revoked")
+        )
+        try await waitUntil { (try await svc.get(resilient.id)).status == .paused }
+        let resilientInfo = try await svc.get(resilient.id)
+        #expect(resilientInfo.runCount.rawValue == 1)
+        #expect(resilientInfo.lastOutcome == .failed)
+        #expect(resilientInfo.lastOutput == "revoked")
 
         runner.cancel()
         await runner.value

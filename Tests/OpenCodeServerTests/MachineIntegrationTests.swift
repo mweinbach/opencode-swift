@@ -397,7 +397,7 @@ struct MachineIntegrationTests {
     func automationRunStartsWithServerAndStopsOnClose() async throws {
         let fs = InMemoryFileSystem(initialFiles: [
             "/workspace/README.md": Helper.utf8Bytes("ok\n"),
-            "/workspace/opencode.json": Helper.utf8Bytes(#"{"experimental":{"automations":true,"mcp_events":true}}"#),
+            "/workspace/opencode.json": Helper.utf8Bytes(#"{"automations":true}"#),
         ])
         let server = try await ServerProcess.start(
             options: ServerOptions(hostname: "127.0.0.1", port: 0, password: "server-password"),

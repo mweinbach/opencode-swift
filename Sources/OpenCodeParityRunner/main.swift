@@ -1104,7 +1104,6 @@ func dispatch(_ req: ParityRequest) throws -> JSONValue {
                     artifacts: e["artifacts"]?.boolValue,
                     videoGenerate: e["video_generate"]?.boolValue.map { .enabled($0) },
                     consoleWatches: e["console_watches"]?.boolValue,
-                    mcpEvents: e["mcp_events"]?.boolValue,
                     recommendedApi: e["recommended_api"]?.boolValue,
                     fullCodemode: e["full_codemode"]?.boolValue,
                     machines: e["machines"]?.boolValue,

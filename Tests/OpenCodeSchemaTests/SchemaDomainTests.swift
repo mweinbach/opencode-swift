@@ -119,14 +119,15 @@ struct SchemaDomainTests {
     @Test("ConfigFlagSchema registry, optInOnly, and wildcard match upstream")
     func configFeatureFlags() {
         #expect(ConfigFlagSchema.wildcard == "all")
-        #expect(ConfigFlagSchema.Key.allCases.count == 12)
-        #expect(ConfigFlagSchema.registry.count == 12)
+        #expect(ConfigFlagSchema.Key.allCases.count == 11)
+        #expect(ConfigFlagSchema.registry.count == 11)
         #expect(ConfigFlagSchema.optInOnly == [.todo])
         #expect(ConfigFlagSchema.Key(rawValue: "recommended_api") == .recommendedApi)
         #expect(ConfigFlagSchema.Key(rawValue: "machines") == .machines)
         #expect(ConfigFlagSchema.Key(rawValue: "home_memory") == .homeMemory)
         #expect(ConfigFlagSchema.Key(rawValue: "project_overlay") == .projectOverlay)
         #expect(ConfigFlagSchema.Key(rawValue: "automations") == nil)
+        #expect(ConfigFlagSchema.Key(rawValue: "mcp_events") == nil)
         #expect(ConfigFlagSchema.registry[.fullCodemode] == "Enable the full Code Mode work in progress.")
         for key in ConfigFlagSchema.Key.allCases {
             #expect(ConfigFlagSchema.registry[key] != nil)

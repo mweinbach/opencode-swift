@@ -1221,19 +1221,19 @@ extension CoreTool {
     // MARK: - AutomationTools (`core/src/tool/plugin/automation.ts`)
 
     public enum AutomationTools {
-        // parity: core/src/tool/plugin/automation.ts#View [status=implemented hash=a0ba3b93a6b8]
+        // parity: core/src/tool/plugin/automation.ts#View [status=implemented hash=ce35b4bc0f42]
         public struct View: Equatable, Hashable, Sendable, Codable {
             public let id: AutomationSchema.ID
             public let name: String
             public let trigger: AutomationSchema.Trigger
             public let tz: String
-            public let action: AutomationSchema.Action
             public let status: AutomationSchema.Status
             public let nextDueAt: String?
             public let expires: String?
             public let runCount: Int
             public let lastRunAt: String?
             public let lastOutcome: AutomationSchema.Outcome?
+            public let action: AutomationSchema.Action
             public let lastOutput: String?
             public let state: JSONValue?
 
@@ -1242,13 +1242,13 @@ extension CoreTool {
                 name: String,
                 trigger: AutomationSchema.Trigger,
                 tz: String,
-                action: AutomationSchema.Action,
                 status: AutomationSchema.Status,
                 nextDueAt: String? = nil,
                 expires: String? = nil,
                 runCount: Int = 0,
                 lastRunAt: String? = nil,
                 lastOutcome: AutomationSchema.Outcome? = nil,
+                action: AutomationSchema.Action,
                 lastOutput: String? = nil,
                 state: JSONValue? = nil
             ) {
@@ -1256,13 +1256,13 @@ extension CoreTool {
                 self.name = name
                 self.trigger = trigger
                 self.tz = tz
-                self.action = action
                 self.status = status
                 self.nextDueAt = nextDueAt
                 self.expires = expires
                 self.runCount = runCount
                 self.lastRunAt = lastRunAt
                 self.lastOutcome = lastOutcome
+                self.action = action
                 self.lastOutput = lastOutput
                 self.state = state
             }
@@ -1283,13 +1283,13 @@ extension CoreTool {
                 name: info.name,
                 trigger: info.trigger,
                 tz: info.tz,
-                action: info.action,
                 status: info.status,
                 nextDueAt: info.nextDueAt.map { CoreTool.formatToolISO8601UTC(epochMillis: Int64($0.epochMillis)) },
                 expires: info.expires.map { CoreTool.formatToolISO8601UTC(epochMillis: Int64($0.epochMillis)) },
                 runCount: info.runCount.rawValue,
                 lastRunAt: info.lastRunAt.map { CoreTool.formatToolISO8601UTC(epochMillis: Int64($0.epochMillis)) },
                 lastOutcome: info.lastOutcome,
+                action: info.action,
                 lastOutput: info.lastOutput,
                 state: info.state
             )
@@ -1900,7 +1900,7 @@ extension CoreTool {
     // MARK: - McpEventTools (`core/src/tool/plugin/mcp-events.ts`)
 
     public enum McpEventTools {
-        // parity: core/src/tool/plugin/mcp-events.ts#Plugin [status=adapted hash=f30130bdfcea]
+        // parity: core/src/tool/plugin/mcp-events.ts#Plugin [status=adapted hash=b06d92a4dff8]
         public static let Plugin = ToolPluginDescriptor(id: "opencode.tools.mcp-events") { editor, env in
             editor.add(RegisteredTool(
                 name: "list_mcp_events",
@@ -1932,15 +1932,15 @@ extension CoreTool {
                     guard let events = try await mcp.events(server: server) else {
                         throw AISchema.ToolFailure(message: "MCP server \"\(server)\" is not connected or sends no events")
                     }
-                    let types = try await events.list().filter { $0.delivery?.contains("push") == true }
+                    let types = try await events.list().filter { $0.delivery.contains("push") }
                     let encodedEvents: [JSONValue] = types.map { type in
                         var entry: [String: JSONValue] = [
                             "server": .string(server),
                             "event": .string(type.name),
+                            "args": .object(type.inputSchema),
+                            "data": .object(type.payloadSchema),
                         ]
                         if let desc = type.description { entry["description"] = .string(desc) }
-                        if let args = type.inputSchema { entry["args"] = .object(args) }
-                        if let data = type.payloadSchema { entry["data"] = .object(data) }
                         return .object(entry)
                     }
                     return ToolSchema.Result(output: .object(["events": .array(encodedEvents)]))

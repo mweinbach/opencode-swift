@@ -16,7 +16,7 @@ import OpenCodeUtil
 public enum CoreAutomation {
     // MARK: - core/src/automation/sql.ts
 
-    // parity: core/src/automation/sql.ts#AutomationTable [status=adapted hash=d5ec6ac90ae3]
+    // parity: core/src/automation/sql.ts#AutomationTable [status=adapted hash=073f71ab495f]
     public enum AutomationTable {
         public static let tableName = "automation"
         public static let createTableSQL = """
@@ -51,64 +51,34 @@ public enum CoreAutomation {
     }
 
     /// Persisted event-watch authorization and replay cursor stored in `automation.event_position`.
-    /// Preserves the upstream tri-state distinction between an unopened watch (`cursor` omitted / `.initial`),
-    /// an opened watch with no replay cursor (`cursor: null` / `.noReplay`), and a replayable cursor string.
     public struct EventPosition: Equatable, Hashable, Sendable, Codable {
-        public enum Cursor: Equatable, Hashable, Sendable {
-            /// Watch has not been opened yet (`cursor === undefined` in upstream).
-            case initial
-            /// Watch was opened without a replayable cursor (`cursor === null` in upstream).
-            case noReplay
-            /// Watch has a replayable cursor token.
-            case value(String)
-
-            public var stringValue: String? {
-                if case .value(let s) = self { return s }
-                return nil
-            }
-        }
-
         public let agent: AgentSchema.ID
-        public let cursor: Cursor
-        public let id: String?
+        public let cursor: String?
 
-        public init(agent: AgentSchema.ID, cursor: Cursor = .initial, id: String? = nil) {
+        public init(agent: AgentSchema.ID, cursor: String? = nil) {
             self.agent = agent
             self.cursor = cursor
-            self.id = id
         }
 
         enum CodingKeys: String, CodingKey {
             case agent
             case cursor
-            case id
         }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.agent = try container.decode(AgentSchema.ID.self, forKey: .agent)
-            if !container.contains(.cursor) {
-                self.cursor = .initial
-            } else if try container.decodeNil(forKey: .cursor) {
-                self.cursor = .noReplay
-            } else {
-                self.cursor = .value(try container.decode(String.self, forKey: .cursor))
-            }
-            self.id = try container.decodeIfPresent(String.self, forKey: .id)
+            self.cursor = try container.decodeIfPresent(String.self, forKey: .cursor)
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(agent, forKey: .agent)
-            switch cursor {
-            case .initial:
-                break
-            case .noReplay:
+            if let cursor {
+                try container.encode(cursor, forKey: .cursor)
+            } else {
                 try container.encodeNil(forKey: .cursor)
-            case .value(let s):
-                try container.encode(s, forKey: .cursor)
             }
-            try container.encodeIfPresent(id, forKey: .id)
         }
     }
 
@@ -145,33 +115,21 @@ public enum CoreAutomation {
     // MARK: - core/src/automation/event.ts
 
     public enum Event {
-        // parity: core/src/automation/event.ts#Message [status=implemented hash=e118084e3973]
-        public struct Message: Equatable, Hashable, Sendable, Codable {
-            public let eventId: String
-            public let name: String
-            public let timestamp: String
-            public let data: JSONValue
-            public let cursor: String?
+        // parity: core/src/automation/event.ts#Message [status=implemented hash=e76478968e39]
+        public struct Message: Equatable, Hashable, Sendable {
+            public let event: CoreMCP.Registry.EventUpdate.EventPayload
+            public let position: CoreMCP.Registry.EventPosition
+            public let truncated: Bool
 
-            public init(eventId: String, name: String, timestamp: String, data: JSONValue, cursor: String? = nil) {
-                self.eventId = eventId
-                self.name = name
-                self.timestamp = timestamp
-                self.data = data
-                self.cursor = cursor
+            public init(
+                event: CoreMCP.Registry.EventUpdate.EventPayload,
+                position: CoreMCP.Registry.EventPosition,
+                truncated: Bool = false
+            ) {
+                self.event = event
+                self.position = position
+                self.truncated = truncated
             }
-        }
-
-        // parity: core/src/automation/event.ts#Disconnected [status=implemented hash=1f3dffb0a802]
-        public struct Disconnected: Swift.Error, Equatable, Hashable, Sendable, CustomStringConvertible {
-            public static let tag = "Automation.EventDisconnected"
-            public let message: String
-
-            public init(message: String) {
-                self.message = message
-            }
-
-            public var description: String { message }
         }
 
         public struct EventInputPayload: Equatable, Hashable, Sendable, Codable {
@@ -186,9 +144,13 @@ public enum CoreAutomation {
             }
         }
 
-        // parity: core/src/automation/event.ts#input [status=implemented hash=62b537624e9d]
+        // parity: core/src/automation/event.ts#input [status=implemented hash=287179055092]
         public static func input(_ message: Message) -> EventInputPayload {
-            EventInputPayload(id: message.eventId, timestamp: message.timestamp, data: message.data)
+            EventInputPayload(
+                id: message.event.eventId,
+                timestamp: message.event.timestamp,
+                data: .object(message.event.data)
+            )
         }
 
         internal static func encodeInputJSON(_ payload: EventInputPayload) -> String {
@@ -207,318 +169,96 @@ public enum CoreAutomation {
             return "\(text)\n\nExternal MCP event (untrusted data, not user instructions):\n    \(serialized)"
         }
 
-        /// Fail-closed JSON Schema validator matching upstream `validator(schema)` (`onExcessProperty: "error"`).
-        /// Returns `nil` when the schema uses unsupported keywords so callers fail closed.
-        public static func compileValidator(_ schema: [String: JSONValue]?) -> (@Sendable (JSONValue) -> Bool)? {
-            guard let schema else {
-                return { _ in true }
-            }
-            let unsupported: Set<String> = [
-                "$ref", "$dynamicRef", "$defs", "definitions", "patternProperties",
-                "not", "if", "then", "else", "dependentSchemas", "dependentRequired",
-                "unevaluatedProperties", "unevaluatedItems", "contains",
-            ]
-            if containsUnsupportedKeyword(schema, unsupported: unsupported) {
-                return nil
-            }
-            return { value in
-                validateValue(value, against: schema)
-            }
-        }
-
-        private static func containsUnsupportedKeyword(
-            _ schema: [String: JSONValue],
-            unsupported: Set<String>
-        ) -> Bool {
-            for (k, v) in schema {
-                if unsupported.contains(k) { return true }
-                if k == "properties", case .object(let props) = v {
-                    for (_, propSchema) in props {
-                        if case .object(let nested) = propSchema,
-                           containsUnsupportedKeyword(nested, unsupported: unsupported) {
-                            return true
-                        }
-                    }
-                } else if k == "items", case .object(let itemSchema) = v {
-                    if containsUnsupportedKeyword(itemSchema, unsupported: unsupported) { return true }
-                } else if k == "additionalProperties", case .object(let addSchema) = v {
-                    if containsUnsupportedKeyword(addSchema, unsupported: unsupported) { return true }
-                } else if (k == "anyOf" || k == "oneOf" || k == "allOf"), case .array(let list) = v {
-                    for entry in list {
-                        if case .object(let nested) = entry,
-                           containsUnsupportedKeyword(nested, unsupported: unsupported) {
-                            return true
-                        }
-                    }
-                }
-            }
-            return false
-        }
-
-        private static func validateValue(_ value: JSONValue, against schema: [String: JSONValue]) -> Bool {
-            if let constVal = schema["const"] {
-                if value != constVal { return false }
-            }
-            if case .array(let enumVals) = schema["enum"] {
-                if !enumVals.contains(value) { return false }
-            }
-            if case .array(let all) = schema["allOf"] {
-                for sub in all {
-                    guard case .object(let subObj) = sub, validateValue(value, against: subObj) else { return false }
-                }
-            }
-            if case .array(let any) = schema["anyOf"] {
-                let matched = any.contains { sub in
-                    guard case .object(let subObj) = sub else { return false }
-                    return validateValue(value, against: subObj)
-                }
-                if !matched { return false }
-            }
-            if case .array(let one) = schema["oneOf"] {
-                var count = 0
-                for sub in one {
-                    if case .object(let subObj) = sub, validateValue(value, against: subObj) {
-                        count += 1
-                    }
-                }
-                if count != 1 { return false }
-            }
-
-            if let typeNode = schema["type"] {
-                let allowedTypes: [String]
-                switch typeNode {
-                case .string(let t): allowedTypes = [t]
-                case .array(let arr): allowedTypes = arr.compactMap { if case .string(let s) = $0 { s } else { nil } }
-                default: allowedTypes = []
-                }
-                if !allowedTypes.isEmpty && !allowedTypes.contains(where: { matchesType(value, type: $0) }) {
-                    return false
-                }
-            }
-
-            switch value {
-            case .object(let obj):
-                if case .array(let req) = schema["required"] {
-                    for entry in req {
-                        if case .string(let key) = entry, obj[key] == nil {
-                            return false
-                        }
-                    }
-                }
-                let props: [String: JSONValue]? = if case .object(let p) = schema["properties"] { p } else { nil }
-                for (key, val) in obj {
-                    if let propSchema = props?[key] {
-                        guard case .object(let subObj) = propSchema, validateValue(val, against: subObj) else {
-                            return false
-                        }
-                    } else if let add = schema["additionalProperties"] {
-                        switch add {
-                        case .bool(true):
-                            continue
-                        case .bool(false):
-                            return false
-                        case .object(let addObj):
-                            guard validateValue(val, against: addObj) else { return false }
-                        default:
-                            return false
-                        }
-                    } else if props != nil {
-                        // Upstream `Schema.decodeUnknownOption(codec, { onExcessProperty: "error" })` rejects excess properties on struct schemas.
-                        return false
-                    }
-                }
-            case .array(let arr):
-                if case .object(let itemSchema) = schema["items"] {
-                    for elem in arr {
-                        guard validateValue(elem, against: itemSchema) else { return false }
-                    }
-                }
-            case .string(let str):
-                if let minLen = intValue(schema["minLength"]), str.utf16.count < minLen { return false }
-                if let maxLen = intValue(schema["maxLength"]), str.utf16.count > maxLen { return false }
-            case .int(let n):
-                let d = Double(n)
-                if let minVal = doubleValue(schema["minimum"]), d < minVal { return false }
-                if let maxVal = doubleValue(schema["maximum"]), d > maxVal { return false }
-            case .double(let d):
-                if let minVal = doubleValue(schema["minimum"]), d < minVal { return false }
-                if let maxVal = doubleValue(schema["maximum"]), d > maxVal { return false }
-            case .bool, .null:
-                break
-            }
-            return true
-        }
-
-        private static func matchesType(_ value: JSONValue, type: String) -> Bool {
-            switch type {
-            case "object":
-                if case .object = value { return true }
-                return false
-            case "array":
-                if case .array = value { return true }
-                return false
-            case "string":
-                if case .string = value { return true }
-                return false
-            case "boolean":
-                if case .bool = value { return true }
-                return false
-            case "null":
-                if case .null = value { return true }
-                return false
-            case "integer":
-                switch value {
-                case .int: return true
-                case .double(let d): return d.isFinite && d.rounded() == d
-                default: return false
-                }
-            case "number":
-                switch value {
-                case .int, .double: return true
-                default: return false
-                }
-            default:
-                return false
-            }
-        }
-
-        private static func intValue(_ value: JSONValue?) -> Int? {
-            switch value {
-            case .int(let n)?: return Int(n)
-            case .double(let d)? where d.isFinite: return Int(d)
-            default: return nil
-            }
-        }
-
-        private static func doubleValue(_ value: JSONValue?) -> Double? {
-            switch value {
-            case .int(let n)?: return Double(n)
-            case .double(let d)? where d.isFinite: return d
-            default: return nil
-            }
-        }
-
-        public struct ValidatedTrigger: Sendable {
-            public let events: any CoreMCP.Client.Events
-            public let validatePayload: @Sendable (JSONValue) -> Bool
-        }
-
-        /// Validates an event trigger against the connected MCP server's event catalog and schemas
-        /// without opening a stream (matching Effect's lazy stream construction during `Automation.create`).
-        public static func validate(
+        /// Fails unless the server is connected and offers this event type for push with these arguments.
+        // parity: core/src/automation/event.ts#check [status=implemented hash=45db5fe9e016]
+        public static func check(
             trigger: AutomationSchema.Event,
-            cursor: String? = nil,
             events: (any CoreMCP.Client.Events)?
-        ) async throws -> ValidatedTrigger {
+        ) async throws {
             guard let events else {
-                let msg = "MCP server \(trigger.server) is not connected or offers no events"
-                if cursor == nil {
-                    throw InvalidError(reason: msg)
-                }
-                throw Disconnected(message: msg)
+                throw InvalidError(reason: "MCP server \(trigger.server) is not connected or offers no events")
             }
-            let types = try await events.list()
-            guard let match = types.first(where: { $0.name == trigger.event }),
-                  match.delivery?.contains("push") == true
-            else {
-                throw InvalidError(reason: "No push event \(trigger.event) on \(trigger.server)")
-            }
-            guard let validateInput = compileValidator(match.inputSchema),
-                  validateInput(.object(trigger.args ?? [:]))
-            else {
-                throw InvalidError(reason: "Event arguments do not match inputSchema")
-            }
-            guard let validatePayload = compileValidator(match.payloadSchema) else {
-                throw InvalidError(reason: "Unsupported event payloadSchema")
-            }
-            return ValidatedTrigger(events: events, validatePayload: validatePayload)
+            try await events.check(name: trigger.event, arguments: trigger.args)
         }
 
-        // parity: core/src/automation/event.ts#resolve [status=implemented hash=0272889ce55f]
-        public static func resolve(
+        public static func check(
             trigger: AutomationSchema.Event,
-            cursor: String? = nil,
-            events: (any CoreMCP.Client.Events)?,
-            lifecycle: CoreLocation.Lifecycle.Service? = nil
-        ) async throws -> AsyncThrowingStream<CoreMCP.Client.EventMessage, Swift.Error> {
-            let validated = try await validate(trigger: trigger, cursor: cursor, events: events)
-            let upstreamStream: AsyncThrowingStream<CoreMCP.Client.EventMessage, Swift.Error>
+            mcp: any CoreMCP.Registry.Interface
+        ) async throws {
+            let events: (any CoreMCP.Client.Events)?
             do {
-                upstreamStream = try await validated.events.stream(
-                    name: trigger.event,
-                    arguments: trigger.args,
-                    cursor: cursor
-                )
-            } catch let err as CoreMCP.Client.EventStreamRejectedError {
-                throw err
-            } catch let err as CoreMCP.Client.EventStreamTerminatedError {
-                throw err
-            } catch {
-                throw Disconnected(message: String(describing: error))
+                events = try await mcp.events(server: trigger.server)
+            } catch is CoreMCP.Registry.NotFoundError {
+                events = nil
             }
+            try await check(trigger: trigger, events: events)
+        }
 
+        /// Follows an MCP event trigger through `mcp.follow`, retaining `lifecycle` while open,
+        /// interrupting cleanly on `lifecycle.awaitShutdown`, and enforcing the 16 KiB serialized event cap.
+        // parity: core/src/automation/event.ts#follow [status=implemented hash=c950ae65e9a2]
+        public static func follow(
+            trigger: AutomationSchema.Event,
+            position: CoreMCP.Registry.EventPosition? = nil,
+            mcp: any CoreMCP.Registry.Interface,
+            lifecycle: CoreLocation.Lifecycle.Service? = nil
+        ) async throws -> AsyncThrowingStream<CoreMCP.Registry.EventUpdate, Swift.Error> {
+            let upstreamStream = try await mcp.follow(
+                server: trigger.server,
+                name: trigger.event,
+                arguments: trigger.args,
+                position: position
+            )
+            return follow(stream: upstreamStream, lifecycle: lifecycle)
+        }
+
+        private final class OnceFlag: Sendable {
+            private let fired = Mutex(false)
+            func claim() -> Bool {
+                fired.withLock { done in
+                    if done { return false }
+                    done = true
+                    return true
+                }
+            }
+        }
+
+        internal static func follow(
+            stream upstreamStream: AsyncThrowingStream<CoreMCP.Registry.EventUpdate, Swift.Error>,
+            lifecycle: CoreLocation.Lifecycle.Service? = nil
+        ) -> AsyncThrowingStream<CoreMCP.Registry.EventUpdate, Swift.Error> {
             let release = lifecycle?.retain()
+            let once = OnceFlag()
+            let releaseOnce: @Sendable () -> Void = {
+                if once.claim() { release?() }
+            }
             return AsyncThrowingStream { continuation in
-                let pump = Task {
-                    defer { release?() }
+                let pump = Task<Void, Never> {
+                    defer { releaseOnce() }
                     do {
-                        for try await msg in upstreamStream {
+                        for try await update in upstreamStream {
                             if Task.isCancelled {
                                 continuation.finish()
                                 return
                             }
-                            switch msg {
-                            case .error:
-                                continue
-                            case .active(let cur, let truncated):
-                                if let cur, cur.utf16.count > 4096 {
-                                    continuation.finish(throwing: InvalidError(reason: "Oversized event cursor"))
+                            if case .event(let ev, let pos, let truncated) = update {
+                                let message = Message(event: ev, position: pos, truncated: truncated)
+                                // A prompt carries the event, so its size is bounded here; the MCP client already checked its shape.
+                                if encodeInputJSON(input(message)).utf8.count > 16_384 {
+                                    continuation.finish(throwing: InvalidError(reason: "Oversized MCP event"))
                                     return
                                 }
-                                if truncated || (cursor != nil && cur == nil) {
-                                    continuation.finish(throwing: InvalidError(
-                                        reason: "Server could not replay from the saved cursor; reconcile and recreate the watch"
-                                    ))
-                                    return
-                                }
-                                continuation.yield(msg)
-                            case .event(let eventId, let name, let ts, let data, let cur):
-                                if let cur, cur.utf16.count > 4096 {
-                                    continuation.finish(throwing: InvalidError(reason: "Oversized event cursor"))
-                                    return
-                                }
-                                let payload = encodeInputJSON(EventInputPayload(id: eventId, timestamp: ts, data: data))
-                                if name != trigger.event || payload.utf8.count > 16_384 || !validated.validatePayload(data) {
-                                    continuation.finish(throwing: InvalidError(
-                                        reason: "Invalid MCP event: wrong name, oversized event or data does not match payloadSchema"
-                                    ))
-                                    return
-                                }
-                                continuation.yield(msg)
-                            case .heartbeat(let cur):
-                                if let cur, cur.utf16.count > 4096 {
-                                    continuation.finish(throwing: InvalidError(reason: "Oversized event cursor"))
-                                    return
-                                }
-                                continuation.yield(msg)
                             }
+                            continuation.yield(update)
                         }
-                        if Task.isCancelled {
-                            continuation.finish()
-                        } else {
-                            continuation.finish(throwing: Disconnected(message: "MCP event stream closed"))
-                        }
-                    } catch let err as CoreMCP.Client.EventStreamRejectedError {
-                        continuation.finish(throwing: err)
-                    } catch let err as CoreMCP.Client.EventStreamTerminatedError {
-                        continuation.finish(throwing: err)
+                        continuation.finish()
                     } catch is CancellationError {
                         continuation.finish()
                     } catch {
                         if Task.isCancelled {
                             continuation.finish()
                         } else {
-                            continuation.finish(throwing: Disconnected(message: String(describing: error)))
+                            continuation.finish(throwing: error)
                         }
                     }
                 }
@@ -526,13 +266,13 @@ public enum CoreAutomation {
                     Task {
                         await lc.awaitShutdown()
                         pump.cancel()
-                        continuation.finish(throwing: Disconnected(message: "MCP event stream closed"))
+                        continuation.finish()
                     }
                 }
                 continuation.onTermination = { _ in
                     shutdownTask?.cancel()
                     pump.cancel()
-                    release?()
+                    releaseOnce()
                 }
             }
         }
@@ -1787,10 +1527,9 @@ public enum CoreAutomation {
         }
     }
 
-    /// Per-directory location services resolved for an automation (flags, MCP events, lifecycle, agents, permissions, tools, shell).
+    /// Per-directory location services resolved for an automation (MCP events, lifecycle, agents, permissions, tools, shell).
     public struct LocationContext: Sendable {
         public let enabled: Bool
-        public let mcpEventsEnabled: Bool
         public let timezone: String?
         public let projectID: ProjectID?
         public let mcp: (any CoreMCP.Registry.Interface)?
@@ -1811,7 +1550,6 @@ public enum CoreAutomation {
 
         public init(
             enabled: Bool = true,
-            mcpEventsEnabled: Bool = true,
             timezone: String? = nil,
             projectID: ProjectID? = nil,
             mcp: (any CoreMCP.Registry.Interface)? = nil,
@@ -1831,7 +1569,6 @@ public enum CoreAutomation {
             mcpEventsOverride: (@Sendable (String) async throws -> (any CoreMCP.Client.Events)?)? = nil
         ) {
             self.enabled = enabled
-            self.mcpEventsEnabled = mcpEventsEnabled
             self.timezone = timezone
             self.projectID = projectID
             self.mcp = mcp
@@ -2069,7 +1806,6 @@ public enum CoreAutomation {
         private static let maxCodeFailures = 3
         private static let tickConcurrency = 4
         private static let maxEventPromptBytes = 32_768
-        private static let maxWatchDisconnectRetries = 3
 
         private enum Leadership {
             case unchecked
@@ -2244,10 +1980,7 @@ public enum CoreAutomation {
             if let resolveLocation {
                 return try await resolveLocation(directory)
             }
-            return LocationContext(
-                enabled: await isEnabledCheck(directory),
-                mcpEventsEnabled: true
-            )
+            return LocationContext(enabled: await isEnabledCheck(directory))
         }
 
         public func create(
@@ -2274,12 +2007,9 @@ public enum CoreAutomation {
                 throw DisabledError()
             }
 
-            // Validate event trigger creation (flags, local tool-call author, permission, push event catalog).
+            // Validate event trigger creation (local tool-call author, permission, push event catalog).
             var eventPosition: EventPosition? = nil
             if case .event(let trigger) = input.trigger {
-                guard location.mcpEventsEnabled else {
-                    throw InvalidError(reason: "Event automations require experimental.mcp_events")
-                }
                 if sessions != nil || resolveLocation != nil {
                     guard let owner, let invocation, owner.location.workspaceID == nil else {
                         throw InvalidError(reason: "Create an event automation from a tool call in a local session")
@@ -2304,12 +2034,20 @@ public enum CoreAutomation {
                     }
                     let events = try await resolveEventsProducer(location: location, server: trigger.server)
                     if events != nil || location.mcp != nil || location.mcpEventsOverride != nil {
-                        _ = try await Event.validate(trigger: trigger, cursor: nil, events: events)
+                        do {
+                            try await Event.check(trigger: trigger, events: events)
+                        } catch let invalid as InvalidError {
+                            throw invalid
+                        } catch let rejected as CoreMCP.Client.EventStreamRejectedError {
+                            throw InvalidError(reason: rejected.message)
+                        } catch {
+                            throw InvalidError(reason: String(describing: error))
+                        }
                     }
-                    eventPosition = EventPosition(agent: invocation.agent, cursor: .initial, id: nil)
+                    eventPosition = EventPosition(agent: invocation.agent, cursor: nil)
                 } else {
                     let agentID = invocation?.agent ?? CoreAgent.Agent.defaultID
-                    eventPosition = EventPosition(agent: agentID, cursor: .initial, id: nil)
+                    eventPosition = EventPosition(agent: agentID, cursor: nil)
                 }
             }
 
@@ -2693,7 +2431,7 @@ public enum CoreAutomation {
 
         private func checkWatch(row: Row, server: String) async throws -> LocationContext {
             let location = try await settings(directory: row.directory)
-            guard location.enabled && location.mcpEventsEnabled else {
+            guard location.enabled else {
                 throw InvalidError(reason: "Event automations are disabled")
             }
             if let sessions {
@@ -2797,129 +2535,113 @@ public enum CoreAutomation {
             }
         }
 
-        private func watchStreamLoop(id: AutomationSchema.ID, delivery: DeliveryLock) async {
-            var consecutiveDisconnects = 0
-            while !Task.isCancelled {
-                do {
-                    let row = try findRow(id)
-                    guard row.status == .active, case .event(let trigger) = row.trigger else { return }
-                    let now = clock()
-                    if let exp = row.expiresAt, now >= exp {
-                        expireWatch(row: row, now: now)
-                        return
+        private func openFollowStream(
+            location: LocationContext,
+            trigger: AutomationSchema.Event,
+            position: CoreMCP.Registry.EventPosition
+        ) async throws -> AsyncThrowingStream<CoreMCP.Registry.EventUpdate, Swift.Error> {
+            if let override = location.mcpEventsOverride {
+                let serverName = CoreMCP.Registry.ServerName(rawValue: trigger.server)
+                let rawStream = CoreMCP.Registry.followEvents(
+                    server: serverName,
+                    name: trigger.event,
+                    arguments: trigger.args,
+                    position: position,
+                    reopenSchedule: CoreMCP.EventErrors.reopen,
+                    sleep: self.sleep
+                ) {
+                    guard let producer = try await override(trigger.server) else {
+                        throw PlatformError.ioFailure("MCP server \(trigger.server) is not connected")
                     }
-                    let location = try await checkWatch(row: row, server: trigger.server)
-                    guard let position = row.eventPosition else {
-                        throw InvalidError(reason: "No authorized event watch")
-                    }
-                    if position.cursor == .noReplay {
-                        throw InvalidError(reason: "No replay cursor; recreate the watch to start from now")
-                    }
-                    let producer = try await resolveEventsProducer(location: location, server: trigger.server)
-                    let stream = try await Event.resolve(
-                        trigger: trigger,
-                        cursor: position.cursor.stringValue,
-                        events: producer,
-                        lifecycle: location.lifecycle
-                    )
-                    // Even a crash before the first heartbeat must not silently turn a restart into a fresh watch.
-                    if position.cursor == .initial {
-                        settle(
-                            row,
-                            SettlePatch(eventPosition: .some(EventPosition(agent: position.agent, cursor: .noReplay, id: position.id)))
-                        )
-                    }
+                    return producer
+                }
+                return Event.follow(stream: rawStream, lifecycle: location.lifecycle)
+            }
+            if let mcp = location.mcp {
+                return try await Event.follow(
+                    trigger: trigger,
+                    position: position,
+                    mcp: mcp,
+                    lifecycle: location.lifecycle
+                )
+            }
+            throw InvalidError(reason: "MCP server \(trigger.server) is not connected or offers no events")
+        }
 
-                    var keepGoing = true
-                    for try await message in stream {
-                        if Task.isCancelled { return }
-                        let shouldContinue: Bool = try await delivery.withPermit {
-                            let current = try self.findRow(id)
-                            let at = self.clock()
-                            if current.status != .active || !self.claimLeader(now: at) {
-                                return false
-                            }
-                            if let exp = current.expiresAt, at >= exp {
-                                self.expireWatch(row: current, now: at)
-                                return false
-                            }
-                            _ = try await self.checkWatch(row: current, server: trigger.server)
-                            switch message {
-                            case .active(let cur, _), .heartbeat(let cur):
-                                let nextCursor: EventPosition.Cursor = cur.map { .value($0) } ?? .noReplay
-                                let nextPos = EventPosition(
-                                    agent: current.eventPosition?.agent ?? position.agent,
-                                    cursor: nextCursor,
-                                    id: current.eventPosition?.id ?? position.id
-                                )
-                                self.settle(current, SettlePatch(eventPosition: .some(nextPos)))
-                                return true
-                            case .event(let eventId, let name, let ts, let data, let cur):
-                                if current.eventPosition?.id == eventId {
-                                    return true
-                                }
-                                let evMsg = Event.Message(
-                                    eventId: eventId,
-                                    name: name,
-                                    timestamp: ts,
-                                    data: data,
-                                    cursor: cur
-                                )
-                                try await self.runAction(row: current, now: at, event: evMsg)
-                                let latest = try self.findRow(id)
-                                return latest.status == .active
-                            case .error:
-                                return true
-                            }
+        private func watchStreamLoop(id: AutomationSchema.ID, delivery: DeliveryLock) async {
+            do {
+                let row = try findRow(id)
+                guard row.status == .active, case .event(let trigger) = row.trigger else { return }
+                let now = clock()
+                if let exp = row.expiresAt, now >= exp {
+                    expireWatch(row: row, now: now)
+                    return
+                }
+                let location = try await checkWatch(row: row, server: trigger.server)
+                guard let position = row.eventPosition else {
+                    throw InvalidError(reason: "No authorized event watch")
+                }
+                let stream = try await openFollowStream(
+                    location: location,
+                    trigger: trigger,
+                    position: CoreMCP.Registry.EventPosition(cursor: position.cursor, seen: [])
+                )
+
+                for try await update in stream {
+                    if Task.isCancelled { return }
+                    if case .pending = update { continue }
+                    let shouldContinue: Bool = try await delivery.withPermit {
+                        let current = try self.findRow(id)
+                        let at = self.clock()
+                        if current.status != .active || !self.claimLeader(now: at) {
+                            return false
                         }
-                        // Only a validated, processed message resets disconnect retry backoff.
-                        consecutiveDisconnects = 0
-                        if !shouldContinue {
-                            keepGoing = false
-                            break
+                        if let exp = current.expiresAt, at >= exp {
+                            self.expireWatch(row: current, now: at)
+                            return false
+                        }
+                        _ = try await self.checkWatch(row: current, server: trigger.server)
+                        switch update {
+                        case .pending:
+                            return true
+                        case .position(let nextPosition):
+                            let nextPos = EventPosition(
+                                agent: current.eventPosition?.agent ?? position.agent,
+                                cursor: nextPosition.cursor
+                            )
+                            self.settle(current, SettlePatch(eventPosition: .some(nextPos)))
+                            return true
+                        case .event(let ev, let nextPosition, let truncated):
+                            let evMsg = Event.Message(event: ev, position: nextPosition, truncated: truncated)
+                            try await self.runAction(row: current, now: at, event: evMsg)
+                            let latest = try self.findRow(id)
+                            return latest.status == .active
                         }
                     }
-                    if !keepGoing { return }
-                } catch is NotFoundError {
-                    return
-                } catch is CancellationError {
-                    return
-                } catch let disconnected as Event.Disconnected {
-                    if Task.isCancelled { return }
-                    guard let current = try? findRow(id) else { return }
-                    guard current.status == .active else { return }
-                    if current.eventPosition?.cursor == .noReplay || current.eventPosition?.cursor == .initial {
-                        pauseWith(row: current, now: clock(), reason: "No replay cursor; recreate the watch to start from now")
+                    if !shouldContinue {
                         return
                     }
-                    consecutiveDisconnects += 1
-                    if consecutiveDisconnects <= Self.maxWatchDisconnectRetries {
-                        let backoffMs: Int64 = 1_000 * Int64(1 << (consecutiveDisconnects - 1))
-                        do {
-                            try await sleep(backoffMs)
-                        } catch {
-                            return
-                        }
-                        continue
+                }
+            } catch is NotFoundError {
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                if Task.isCancelled { return }
+                if let current = try? findRow(id), current.status == .active {
+                    let reason: String
+                    if let invalid = error as? InvalidError {
+                        reason = invalid.reason
+                    } else if let rejected = error as? CoreMCP.Client.EventStreamRejectedError {
+                        reason = rejected.message
+                    } else if let terminated = error as? CoreMCP.Client.EventStreamTerminatedError {
+                        reason = terminated.message
+                    } else if let unavailable = error as? CoreMCP.Registry.EventsUnavailableError {
+                        reason = unavailable.message
+                    } else {
+                        reason = String(describing: error)
                     }
-                    pauseWith(row: current, now: clock(), reason: String(disconnected.message.prefix(1024)))
-                    return
-                } catch {
-                    if Task.isCancelled { return }
-                    if let current = try? findRow(id), current.status == .active {
-                        let reason: String
-                        if let invalid = error as? InvalidError {
-                            reason = invalid.reason
-                        } else if let rejected = error as? CoreMCP.Client.EventStreamRejectedError {
-                            reason = rejected.message
-                        } else if let terminated = error as? CoreMCP.Client.EventStreamTerminatedError {
-                            reason = terminated.message
-                        } else {
-                            reason = String(describing: error)
-                        }
-                        pauseWith(row: current, now: clock(), reason: String(reason.prefix(1024)))
-                    }
-                    return
+                    pauseWith(row: current, now: clock(), reason: String(reason.prefix(1024)))
                 }
             }
         }
@@ -3570,10 +3292,9 @@ public enum CoreAutomation {
             event: Event.Message?
         ) -> SettlePatch {
             if let event, let pos = row.eventPosition {
-                let nextCursor: EventPosition.Cursor = event.cursor.map { .value($0) } ?? .noReplay
                 var patch = SettlePatch()
                 if done { patch.status = .done }
-                patch.eventPosition = .some(EventPosition(agent: pos.agent, cursor: nextCursor, id: event.eventId))
+                patch.eventPosition = .some(EventPosition(agent: pos.agent, cursor: event.position.cursor))
                 return patch
             }
             let next = Self.computeNextDue(trigger: row.trigger, previousDueMs: row.nextDueAt, tz: row.tz, now: ended)

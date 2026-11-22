@@ -17,7 +17,6 @@ public enum ConfigFlagSchema {
         case artifacts
         case videoGenerate = "video_generate"
         case consoleWatches = "console_watches"
-        case mcpEvents = "mcp_events"
         case recommendedApi = "recommended_api"
         case fullCodemode = "full_codemode"
         case machines
@@ -27,7 +26,7 @@ public enum ConfigFlagSchema {
     }
 
     /// Registry mapping each feature flag key to its human-readable description.
-    // parity: schema/src/config/flag.ts#registry [status=implemented hash=373aeab8b7b3]
+    // parity: schema/src/config/flag.ts#registry [status=implemented hash=e07f762bfd0a]
     public static let registry: [Key: String] = [
         .todo:
             "Enable the experimental todowrite tool. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=todo or experimental.todo: true.",
@@ -39,8 +38,6 @@ public enum ConfigFlagSchema {
             "Enable experimental video generation: the HTTP API that starts a video job and stores the result, and the agent tool that saves the videos into the workspace.",
         .consoleWatches:
             "Watch Slack threads, GitHub pull requests, issues, commits and Actions runs, and the workspace's MCP servers' events through OpenCode Console, and wake sessions when they change.",
-        .mcpEvents:
-            "Enable experimental MCP Events, a draft MCP extension: declare support to MCP servers and read the events of servers that offer them.",
         .recommendedApi:
             "Use each model's recommended API from models.dev instead of the first API it lists.",
         .fullCodemode:
@@ -963,7 +960,6 @@ public enum ConfigExperimentalSchema {
         public let artifacts: Bool?
         public let videoGenerate: VideoGenerate?
         public let consoleWatches: Bool?
-        public let mcpEvents: Bool?
         public let recommendedApi: Bool?
         public let fullCodemode: Bool?
         public let machines: Bool?
@@ -987,7 +983,6 @@ public enum ConfigExperimentalSchema {
             artifacts: Bool? = nil,
             videoGenerate: VideoGenerate? = nil,
             consoleWatches: Bool? = nil,
-            mcpEvents: Bool? = nil,
             recommendedApi: Bool? = nil,
             fullCodemode: Bool? = nil,
             machines: Bool? = nil,
@@ -1008,7 +1003,6 @@ public enum ConfigExperimentalSchema {
             self.artifacts = artifacts
             self.videoGenerate = videoGenerate
             self.consoleWatches = consoleWatches
-            self.mcpEvents = mcpEvents
             self.recommendedApi = recommendedApi
             self.fullCodemode = fullCodemode
             self.machines = machines
@@ -1029,7 +1023,6 @@ public enum ConfigExperimentalSchema {
             case .artifacts: return artifacts
             case .videoGenerate: return videoGenerate?.isEnabled
             case .consoleWatches: return consoleWatches
-            case .mcpEvents: return mcpEvents
             case .recommendedApi: return recommendedApi
             case .fullCodemode: return fullCodemode
             case .machines: return machines
@@ -1048,7 +1041,6 @@ public enum ConfigExperimentalSchema {
             case artifacts
             case videoGenerate = "video_generate"
             case consoleWatches = "console_watches"
-            case mcpEvents = "mcp_events"
             case recommendedApi = "recommended_api"
             case fullCodemode = "full_codemode"
             case machines
